@@ -9,11 +9,11 @@ bucket_name = "waiver-pdfs"
 [[d1_databases]]
 binding = "DB"
 database_name = "waiver-db"
-database_id = "your-database-id"
+database_id = "9af8c837-9326-4723-9a5c-f048870aed7e"
 
 [[kv_namespaces]]
 binding = "CONFIG"
-id = "your-kv-namespace-id"
+id = "839815e215af46048bc18e3c886756f0"
 
 [vars]
 EMAIL_FROM = "waivers@yourdomain.com"

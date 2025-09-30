@@ -1,4 +1,3 @@
-import { html, css, js } from './templates.js'
 import { renderPdf, sendEmail, generateId, generateAccessCode } from './utils.js'
 
 export default {
@@ -7,7 +6,13 @@ export default {
     const method = request.method
 
     if (method === 'GET' && url.pathname === '/') {
-      return new Response(html, { headers: { 'Content-Type': 'text/html' } })
+      return new Response(await getIndexHtml(), { 
+        headers: { 'Content-Type': 'text/html' } 
+      })
+    }
+
+    if (method === 'GET' && url.pathname.startsWith('/assets/')) {
+      return handleAssets(request, env)
     }
 
     if (method === 'POST' && url.pathname === '/submit') {
@@ -26,6 +31,48 @@ export default {
 
     return new Response('Not Found', { status: 404 })
   }
+}
+
+async function getIndexHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Activity Waiver System</title>
+    <link rel="stylesheet" href="/assets/index.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/assets/index.js"></script>
+  </body>
+</html>`
+}
+
+async function handleAssets(request, env) {
+  const url = new URL(request.url)
+  const assetPath = url.pathname.replace('/assets/', '')
+  
+  try {
+    const asset = await env.PDF_STORAGE.get(`assets/${assetPath}`)
+    if (asset) {
+      const contentType = getContentType(assetPath)
+      return new Response(asset.body, {
+        headers: { 'Content-Type': contentType }
+      })
+    }
+  } catch (error) {
+    console.error('Asset not found:', assetPath)
+  }
+  
+  return new Response('Asset not found', { status: 404 })
+}
+
+function getContentType(path) {
+  if (path.endsWith('.js')) return 'application/javascript'
+  if (path.endsWith('.css')) return 'text/css'
+  if (path.endsWith('.html')) return 'text/html'
+  return 'application/octet-stream'
 }
 
 async function handleSubmit(request, env) {

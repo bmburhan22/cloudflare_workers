@@ -79,23 +79,7 @@ export async function renderPdf(activity, data, accessCode) {
     </html>
   `
 
-  const response = await fetch('https://api.html-pdf-node.com/convert', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      html: html,
-      options: {
-        format: 'A4',
-        margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' }
-      }
-    })
-  })
-
-  if (!response.ok) {
-    throw new Error('PDF generation failed')
-  }
-
-  return await response.arrayBuffer()
+  return new TextEncoder().encode(html)
 }
 
 export async function sendEmail(env, email, name, pdfs, accessCodes) {
@@ -143,30 +127,22 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
     </html>
   `
 
-  const emailData = {
-    from: env.EMAIL_FROM,
-    to: email,
-    subject: 'Activity Waiver Documents',
-    html: emailContent,
-    attachments: attachments
+  const formData = new FormData()
+  formData.append('from', env.EMAIL_FROM)
+  formData.append('to', email)
+  formData.append('subject', 'Activity Waiver Documents')
+  formData.append('html', emailContent)
+  
+  for (let i = 0; i < attachments.length; i++) {
+    formData.append(`attachment[${i}]`, new Blob([attachments[i].content], { type: 'application/pdf' }), attachments[i].filename)
   }
 
-  const response = await fetch('https://api.mailgun.net/v3/your-domain/messages', {
+  const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${btoa(`api:${env.MAILGUN_API_KEY}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
     },
-    body: new URLSearchParams({
-      from: emailData.from,
-      to: emailData.to,
-      subject: emailData.subject,
-      html: emailData.html,
-      ...attachments.reduce((acc, att, i) => {
-        acc[`attachment[${i}]`] = att.content
-        return acc
-      }, {})
-    })
+    body: formData
   })
 
   if (!response.ok) {
