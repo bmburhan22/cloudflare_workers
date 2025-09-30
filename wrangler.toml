@@ -1,0 +1,20 @@
+name = "waiver-system"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[[r2_buckets]]
+binding = "PDF_STORAGE"
+bucket_name = "waiver-pdfs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "waiver-db"
+database_id = "your-database-id"
+
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "your-kv-namespace-id"
+
+[vars]
+EMAIL_FROM = "waivers@yourdomain.com"
+LEGAL_VERSION = "v1.0"
