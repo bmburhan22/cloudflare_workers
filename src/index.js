@@ -111,12 +111,12 @@ async function handleSubmit(request, env) {
         }
       }
 
-      await sendEmail(env, email, name, existingPdfs, existingAccessCodes)
+      const emailResult = await sendEmail(env, email, name, existingPdfs, existingAccessCodes)
 
       return new Response(JSON.stringify({
-        success: true,
+        success: emailResult.success,
         accessCodes: existingAccessCodes,
-        message: 'Email sent with existing PDFs and access codes'
+        message: emailResult.success ? 'Email sent with existing PDFs and access codes' : `Email failed: ${emailResult.message}`
       }), { headers: { 'Content-Type': 'application/json' } })
     }
 
@@ -133,7 +133,7 @@ async function handleSubmit(request, env) {
       const accessCode = generateAccessCode()
       accessCodes[activity] = accessCode
       
-      const pdf = await renderPdf(activity, { property, checkinDate, name, initials, signature }, accessCode)
+      const pdf = await renderPdf(activity, { property, checkinDate, name, initials, signature }, accessCode, env)
       const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.split(' ').pop()}-${name.split(' ')[0]}-${submissionId}.pdf`
       
       await env.PDF_STORAGE.put(key, pdf)
@@ -152,12 +152,12 @@ async function handleSubmit(request, env) {
       `).bind(submissionId, pdf.activity, pdf.key, pdf.accessCode, new Date().toISOString()).run()
     }
 
-    await sendEmail(env, email, name, pdfs, accessCodes)
+    const emailResult = await sendEmail(env, email, name, pdfs, accessCodes)
 
     return new Response(JSON.stringify({
-      success: true,
+      success: emailResult.success,
       accessCodes: accessCodes,
-      message: 'Email sent with PDFs and access codes'
+      message: emailResult.success ? 'Email sent with PDFs and access codes' : `Email failed: ${emailResult.message}`
     }), { headers: { 'Content-Type': 'application/json' } })
 
   } catch (error) {

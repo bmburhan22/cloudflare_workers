@@ -6,123 +6,318 @@ export function generateAccessCode() {
   return Math.floor(1000 + Math.random() * 9000).toString()
 }
 
-export async function renderPdf(activity, data, accessCode) {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-        .content { margin-bottom: 30px; }
-        .signature-section { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; }
-        .signature-box { display: inline-block; width: 200px; height: 80px; border: 1px solid #333; margin: 10px; }
-        .footer { margin-top: 40px; font-size: 12px; color: #666; }
-        .pin { font-size: 24px; font-weight: bold; color: #d63031; text-align: center; margin: 20px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>Activity Waiver - ${activity.toUpperCase()}</h1>
-        <p>Property: ${data.property} | Check-in: ${data.checkinDate}</p>
-        <p>Participant: ${data.name} | Date: ${new Date().toLocaleDateString()}</p>
-      </div>
-
-      <div class="content">
-        <h2>Release and Waiver of Liability</h2>
-        <p>I, ${data.name}, acknowledge that I am voluntarily participating in ${activity} activities at ${data.property}.</p>
-        
-        <h3>Risks and Hazards</h3>
-        <p>I understand that ${activity} involves inherent risks including but not limited to:</p>
-        <ul>
-          <li>Physical injury or death</li>
-          <li>Equipment failure or malfunction</li>
-          <li>Weather conditions</li>
-          <li>Terrain hazards</li>
-          <li>Other participants' actions</li>
-        </ul>
-
-        <h3>Assumption of Risk</h3>
-        <p>I voluntarily assume all risks associated with participation in ${activity} activities.</p>
-
-        <h3>Release of Liability</h3>
-        <p>I hereby release, waive, and discharge ${data.property} from any and all claims, demands, or causes of action arising from my participation.</p>
-
-        <h3>Medical Treatment</h3>
-        <p>I consent to emergency medical treatment if necessary and agree to be responsible for all medical expenses.</p>
-
-        <h3>Governing Law</h3>
-        <p>This waiver shall be governed by the laws of the jurisdiction where ${data.property} is located.</p>
-      </div>
-
-      <div class="signature-section">
-        <p><strong>Participant Initials:</strong> ${data.initials}</p>
-        <p><strong>Signature:</strong></p>
-        <div class="signature-box">
-          <img src="${data.signature}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+export async function renderPdf(activity, data, accessCode, env) {
+  try {
+    // Create HTML content for PDF generation
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Activity Waiver - ${activity}</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 40px; 
+            line-height: 1.6; 
+            color: #333;
+            max-width: 800px;
+          }
+          .header { 
+            text-align: center; 
+            border-bottom: 2px solid #333; 
+            padding-bottom: 20px; 
+            margin-bottom: 30px; 
+          }
+          .title { 
+            font-size: 18px; 
+            font-weight: bold; 
+            margin-bottom: 10px; 
+          }
+          .subtitle { 
+            font-size: 12px; 
+            margin-bottom: 5px; 
+          }
+          .content { 
+            margin-bottom: 30px; 
+          }
+          .section-title { 
+            font-size: 14px; 
+            font-weight: bold; 
+            margin-top: 20px; 
+            margin-bottom: 10px; 
+          }
+          .paragraph { 
+            margin-bottom: 10px; 
+          }
+          .list { 
+            margin-left: 20px; 
+            margin-bottom: 10px; 
+          }
+          .list-item { 
+            margin-bottom: 5px; 
+          }
+          .signature-section { 
+            margin-top: 40px; 
+            border-top: 1px solid #ccc; 
+            padding-top: 20px; 
+          }
+          .signature-box { 
+            display: inline-block; 
+            width: 200px; 
+            height: 80px; 
+            border: 1px solid #333; 
+            margin: 10px 0; 
+            vertical-align: top;
+          }
+          .signature-image { 
+            max-width: 180px; 
+            max-height: 70px; 
+            object-fit: contain;
+          }
+          .access-code { 
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #d63031; 
+            text-align: center; 
+            margin: 20px 0; 
+            background-color: #fff3cd; 
+            padding: 15px; 
+            border: 1px solid #ffeaa7; 
+            border-radius: 4px;
+          }
+          .footer { 
+            margin-top: 40px; 
+            font-size: 10px; 
+            color: #666; 
+            text-align: center; 
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">Activity Waiver - ${activity.toUpperCase()}</div>
+          <div class="subtitle">Property: ${data.property} | Check-in: ${data.checkinDate}</div>
+          <div class="subtitle">Participant: ${data.name} | Date: ${new Date().toLocaleDateString()}</div>
         </div>
-        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-        
-        <div class="pin">
-          <p>${activity.charAt(0).toUpperCase() + activity.slice(1)} Access Code: ${accessCode}</p>
-          <p><small>Use this code to access the ${activity} area</small></p>
+
+        <div class="content">
+          <div class="section-title">Release and Waiver of Liability</div>
+          <div class="paragraph">
+            I, ${data.name}, acknowledge that I am voluntarily participating in ${activity} activities at ${data.property}.
+          </div>
+          
+          <div class="section-title">Risks and Hazards</div>
+          <div class="paragraph">
+            I understand that ${activity} involves inherent risks including but not limited to:
+          </div>
+          <div class="list">
+            <div class="list-item">• Physical injury or death</div>
+            <div class="list-item">• Equipment failure or malfunction</div>
+            <div class="list-item">• Weather conditions</div>
+            <div class="list-item">• Terrain hazards</div>
+            <div class="list-item">• Other participants' actions</div>
+          </div>
+
+          <div class="section-title">Assumption of Risk</div>
+          <div class="paragraph">
+            I voluntarily assume all risks associated with participation in ${activity} activities.
+          </div>
+
+          <div class="section-title">Release of Liability</div>
+          <div class="paragraph">
+            I hereby release, waive, and discharge ${data.property} from any and all claims, demands, or causes of action arising from my participation.
+          </div>
+
+          <div class="section-title">Medical Treatment</div>
+          <div class="paragraph">
+            I consent to emergency medical treatment if necessary and agree to be responsible for all medical expenses.
+          </div>
+
+          <div class="section-title">Governing Law</div>
+          <div class="paragraph">
+            This waiver shall be governed by the laws of the jurisdiction where ${data.property} is located.
+          </div>
         </div>
-      </div>
 
-      <div class="footer">
-        <p>Document ID: ${generateId()}</p>
-        <p>Generated: ${new Date().toISOString()}</p>
-        <p>Legal Version: v1.0</p>
-      </div>
-    </body>
-    </html>
-  `
+        <div class="signature-section">
+          <div class="paragraph">
+            <strong>Participant Initials:</strong> ${data.initials}
+          </div>
+          <div class="paragraph">
+            <strong>Signature:</strong>
+          </div>
+          <div class="signature-box">
+            ${data.signature ? `<img src="${data.signature}" class="signature-image" />` : ''}
+          </div>
+          <div class="paragraph">
+            <strong>Date:</strong> ${new Date().toLocaleDateString()}
+          </div>
+          
+          <div class="access-code">
+            <div>${activity.charAt(0).toUpperCase() + activity.slice(1)} Access Code: ${accessCode}</div>
+            <div style="font-size: 10px; margin-top: 5px;">
+              Use this code to access the ${activity} area
+            </div>
+          </div>
+        </div>
 
-  return new TextEncoder().encode(html)
+        <div class="footer">
+          <div>Document ID: ${generateId()}</div>
+          <div>Generated: ${new Date().toISOString()}</div>
+          <div>Legal Version: v1.0</div>
+        </div>
+      </body>
+      </html>
+    `
+
+    // Use Cloudflare Browser Rendering API to generate PDF
+    if (env && env.BROWSER) {
+      try {
+        const puppeteer = await import('@cloudflare/puppeteer')
+        const browser = await puppeteer.launch(env.BROWSER)
+        const page = await browser.newPage()
+        
+        // Set the HTML content
+        await page.setContent(html)
+        
+        // Generate PDF with options
+        const pdf = await page.pdf({
+          format: 'A4',
+          margin: {
+            top: '40px',
+            right: '40px',
+            bottom: '40px',
+            left: '40px'
+          },
+          printBackground: true
+        })
+        
+        // Close browser
+        await browser.close()
+        
+        return new Uint8Array(pdf)
+      } catch (browserError) {
+        console.warn('Browser Rendering API failed, falling back to HTML:', browserError.message)
+        // Fallback to HTML when browser API fails (rate limits, etc.)
+        return new TextEncoder().encode(html)
+      }
+    } else {
+      // Fallback for local development - return HTML
+      return new TextEncoder().encode(html)
+    }
+    
+  } catch (error) {
+    console.error('Error generating PDF:', error)
+    throw new Error(`Failed to generate PDF: ${error.message}`)
+  }
 }
 
 export async function sendEmail(env, email, name, pdfs, accessCodes) {
-  const emailContent = `
-    <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6;">
-      <h2>Activity Waiver Confirmation</h2>
-      <p>Dear ${name},</p>
-      <p>Thank you for completing your activity waivers. Your documents have been processed successfully.</p>
-      
-      <h3>Activities Covered:</h3>
-      <ul>
-        ${pdfs.map(pdf => `<li>${pdf.activity}</li>`).join('')}
-      </ul>
-      
-      <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
-        <h3 style="color: #d63031; margin-top: 0;">Access Codes:</h3>
-        ${Object.entries(accessCodes).map(([activity, code]) => 
-          `<p><strong>${activity.charAt(0).toUpperCase() + activity.slice(1)}:</strong> ${code}</p>`
-        ).join('')}
-        <p><small>Use these codes to access the respective activity areas during your stay.</small></p>
-      </div>
-      
-      <p>Please keep this email for your records.</p>
-      <p>Have a great time!</p>
-      
-      <hr style="margin: 30px 0;">
-      <p style="font-size: 12px; color: #666;">
-        This email was automatically generated. Please do not reply to this message.
-      </p>
-    </body>
-    </html>
-  `
+  try {
+    // Check if Resend API key is configured
+    if (!env.RESEND_API_KEY) {
+      console.error('RESEND_API_KEY is not configured')
+      return { success: false, message: 'Email service not configured. Please set RESEND_API_KEY secret.' }
+    }
 
-  const emailData = {
-    from: env.EMAIL_FROM,
-    to: email,
-    subject: 'Activity Waiver Documents',
-    html: emailContent
+    const emailContent = `
+      <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Activity Waiver Confirmation</h2>
+        <p>Dear ${name},</p>
+        <p>Thank you for completing your activity waivers. Your documents have been processed successfully.</p>
+        
+        <h3>Activities Covered:</h3>
+        <ul>
+          ${pdfs.map(pdf => `<li>${pdf.activity}</li>`).join('')}
+        </ul>
+        
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
+          <h3 style="color: #d63031; margin-top: 0;">Access Codes:</h3>
+          ${Object.entries(accessCodes).map(([activity, code]) => 
+            `<p><strong>${activity.charAt(0).toUpperCase() + activity.slice(1)}:</strong> ${code}</p>`
+          ).join('')}
+          <p><small>Use these codes to access the respective activity areas during your stay.</small></p>
+        </div>
+        
+        <p>Please find your signed waiver documents attached to this email. If you receive HTML files, you can open them in your browser and use Ctrl+P to save as PDF.</p>
+        <p>Please keep this email for your records.</p>
+        <p>Have a great time!</p>
+        
+        <hr style="margin: 30px 0;">
+        <p style="font-size: 12px; color: #666;">
+          This email was automatically generated. Please do not reply to this message.
+        </p>
+      </body>
+      </html>
+    `
+
+    // Prepare attachments
+    const attachments = []
+    
+    for (const pdf of pdfs) {
+      try {
+        // Get the document from storage
+        const docData = await env.PDF_STORAGE.get(pdf.key)
+        if (docData) {
+          // Convert the document data to base64 for email attachment
+          const docBuffer = await docData.arrayBuffer()
+          const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
+          
+          // Determine file type based on content
+          const isPdf = pdf.key.endsWith('.pdf')
+          const filename = isPdf ? `${pdf.activity}-waiver.pdf` : `${pdf.activity}-waiver.html`
+          const contentType = isPdf ? 'application/pdf' : 'text/html'
+          
+          attachments.push({
+            filename: filename,
+            content: base64Doc,
+            type: contentType,
+            disposition: 'attachment'
+          })
+        } else {
+          console.error(`Document not found in storage: ${pdf.key}`)
+        }
+      } catch (error) {
+        console.error(`Error retrieving PDF ${pdf.key}:`, error)
+      }
+    }
+
+    const emailData = {
+      from: env.EMAIL_FROM,
+      to: email,
+      subject: 'Activity Waiver Documents',
+      html: emailContent,
+      attachments: attachments
+    }
+
+    console.log('Sending email to:', email)
+    console.log('Number of attachments:', attachments.length)
+    
+    // Send email using Resend
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error('Resend API error:', response.status, errorData)
+      throw new Error(`Failed to send email: ${response.status} ${errorData}`)
+    }
+
+    const result = await response.json()
+    console.log('Email sent successfully:', result.id)
+    
+    return { success: true, message: 'Email sent successfully', emailId: result.id }
+    
+  } catch (error) {
+    console.error('Error sending email:', error)
+    return { success: false, message: error.message }
   }
-
-  console.log('Sending email to:', email)
-  console.log('Email content:', emailContent)
-  
-  return { success: true, message: 'Email sent successfully' }
 }

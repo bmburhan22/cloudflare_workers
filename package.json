@@ -6,13 +6,17 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler deploy"
+    "test-pdf": "node test-pdf.js",
+    "upload-assets": "wrangler r2 object put waiver-pdfs/assets/index.html --file dist/index.html && wrangler r2 object put waiver-pdfs/assets/assets/index.css --file dist/assets/index.css && wrangler r2 object put waiver-pdfs/assets/assets/index.js --file dist/assets/index.js",
+    "deploy": "npm run build && npm run upload-assets && wrangler deploy"
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "resend": "^6.1.1"
   },
   "devDependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",

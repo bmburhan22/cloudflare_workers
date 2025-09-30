@@ -2,6 +2,11 @@ name = "waiver-system"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
+compatibility_flags = ["nodejs_compat"]
+
+browser = { binding = "BROWSER" }
+
+
 [[r2_buckets]]
 binding = "PDF_STORAGE"
 bucket_name = "waiver-pdfs"
@@ -16,5 +21,5 @@ binding = "CONFIG"
 id = "839815e215af46048bc18e3c886756f0"
 
 [vars]
-EMAIL_FROM = "waivers@yourdomain.com"
+EMAIL_FROM = "waivers@resend.dev"
 LEGAL_VERSION = "v1.0"
