@@ -1,5 +1,5 @@
 export function generateId() {
-  return Math.random().toString(36).substr(2, 9)
+  return new Date().getTime().toString()
 }
 
 export function generateAccessCode() {
@@ -215,11 +215,15 @@ export async function renderPdf(activity, data, accessCode, env) {
 
 export async function sendEmail(env, email, name, pdfs, accessCodes) {
   try {
-    // Check if Resend API key is configured
-    if (!env.RESEND_API_KEY) {
-      console.error('RESEND_API_KEY is not configured')
-      return { success: false, message: 'Email service not configured. Please set RESEND_API_KEY secret.' }
+    // Check if Cloudflare Email binding is configured
+    if (!env.SEND_EMAIL) {
+      console.error('Cloudflare Email binding is not configured')
+      return { success: false, message: 'Email service not configured. Please add SEND_EMAIL binding to wrangler.toml.' }
     }
+
+    // Import required modules for Cloudflare Email
+    const { EmailMessage } = await import('cloudflare:email')
+    const { createMimeMessage } = await import('mimetext')
 
     const emailContent = `
       <html>
@@ -228,10 +232,22 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
         <p>Dear ${name},</p>
         <p>Thank you for completing your activity waivers. Your documents have been processed successfully.</p>
         
-        <h3>Activities Covered:</h3>
-        <ul>
-          ${pdfs.map(pdf => `<li>${pdf.activity}</li>`).join('')}
-        </ul>
+      <h3>Activities Covered:</h3>
+      <ul>
+        ${pdfs.map(pdf => {
+          if (pdf.error) {
+            return `<li>${pdf.activity} <span style="color: #d63031;">(Failed to generate document)</span></li>`
+          }
+          return `<li>${pdf.activity}</li>`
+        }).join('')}
+      </ul>
+      
+      ${pdfs.some(pdf => pdf.error) ? `
+        <div style="background: #ffebee; border: 1px solid #f44336; padding: 15px; margin: 20px 0; border-radius: 4px;">
+          <h3 style="color: #d63031; margin-top: 0;">Note:</h3>
+          <p>Some documents could not be generated due to system limitations. You can still access the activities using your access codes below.</p>
+        </div>
+      ` : ''}
         
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
           <h3 style="color: #d63031; margin-top: 0;">Access Codes:</h3>
@@ -242,6 +258,7 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
         </div>
         
         <p>Please find your signed waiver documents attached to this email. If you receive HTML files, you can open them in your browser and use Ctrl+P to save as PDF.</p>
+        ${pdfs.some(pdf => pdf.error) ? `<p><strong>Note:</strong> Some documents could not be generated due to system limitations, but your access codes are still valid.</p>` : ''}
         <p>Please keep this email for your records.</p>
         <p>Have a great time!</p>
         
@@ -253,12 +270,19 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
       </html>
     `
 
-    // Prepare attachments
-    const attachments = []
-    
+    // Create MIME message
+    const msg = createMimeMessage()
+    msg.setSender({ name: "Activity Waiver System", addr: env.EMAIL_FROM })
+    msg.setRecipient(email)
+    msg.setSubject('Activity Waiver Documents')
+    msg.addMessage({
+      contentType: 'text/html',
+      data: emailContent
+    })
+
+    // Add attachments
     for (const pdf of pdfs) {
       try {
-        // Get the document from storage
         const docData = await env.PDF_STORAGE.get(pdf.key)
         if (docData) {
           // Convert the document data to base64 for email attachment
@@ -266,15 +290,14 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
           const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
           
           // Determine file type based on content
-          const isPdf = pdf.key.endsWith('.pdf')
-          const filename = isPdf ? `${pdf.activity}-waiver.pdf` : `${pdf.activity}-waiver.html`
-          const contentType = isPdf ? 'application/pdf' : 'text/html'
+          const filename = `${pdf.activity}-waiver.pdf`
+          const contentType = 'application/pdf'
           
-          attachments.push({
+          msg.addAttachment({
             filename: filename,
-            content: base64Doc,
-            type: contentType,
-            disposition: 'attachment'
+            contentType: contentType,
+            data: base64Doc,
+            encoding: 'base64'
           })
         } else {
           console.error(`Document not found in storage: ${pdf.key}`)
@@ -284,37 +307,20 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
       }
     }
 
-    const emailData = {
-      from: env.EMAIL_FROM,
-      to: email,
-      subject: 'Activity Waiver Documents',
-      html: emailContent,
-      attachments: attachments
-    }
+    // Create EmailMessage
+    const message = new EmailMessage(
+      env.EMAIL_FROM,
+      email,
+      msg.asRaw()
+    )
 
     console.log('Sending email to:', email)
-    console.log('Number of attachments:', attachments.length)
     
-    // Send email using Resend
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailData)
-    })
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Resend API error:', response.status, errorData)
-      throw new Error(`Failed to send email: ${response.status} ${errorData}`)
-    }
-
-    const result = await response.json()
-    console.log('Email sent successfully:', result.id)
+    // Send email using Cloudflare Email
+    await env.SEND_EMAIL.send(message)
+    console.log('Email sent successfully via Cloudflare Email')
     
-    return { success: true, message: 'Email sent successfully', emailId: result.id }
+    return { success: true, message: 'Email sent successfully' }
     
   } catch (error) {
     console.error('Error sending email:', error)

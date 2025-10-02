@@ -1,6 +1,5 @@
-import { renderPdf, generateId, generateAccessCode } from './src/utils.js'
+import { renderPdf, generateId, generateAccessCode } from './utils.js'
 import { writeFileSync } from 'fs'
-
 async function testPdfGeneration() {
   console.log('🧪 Testing PDF generation...')
   

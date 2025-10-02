@@ -6,9 +6,7 @@ export default {
     const method = request.method
 
     if (method === 'GET' && url.pathname === '/') {
-      return new Response(await getIndexHtml(), { 
-        headers: { 'Content-Type': 'text/html' } 
-      })
+      return handleIndexHtml(env)
     }
 
     if (method === 'GET' && url.pathname.startsWith('/assets/')) {
@@ -33,8 +31,20 @@ export default {
   }
 }
 
-async function getIndexHtml() {
-  return `<!DOCTYPE html>
+async function handleIndexHtml(env) {
+  try {
+    const indexHtml = await env.ASSETS.get('index.html')
+    if (indexHtml) {
+      return new Response(indexHtml, {
+        headers: { 'Content-Type': 'text/html' }
+      })
+    }
+  } catch (error) {
+    console.error('Error loading index.html from KV:', error)
+  }
+  
+  // Fallback to basic HTML if KV file not found
+  return new Response(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -46,7 +56,9 @@ async function getIndexHtml() {
     <div id="root"></div>
     <script type="module" src="/assets/index.js"></script>
   </body>
-</html>`
+</html>`, {
+    headers: { 'Content-Type': 'text/html' }
+  })
 }
 
 async function handleAssets(request, env) {
@@ -54,15 +66,18 @@ async function handleAssets(request, env) {
   const assetPath = url.pathname.replace('/assets/', '')
   
   try {
-    const asset = await env.PDF_STORAGE.get(`assets/${assetPath}`)
+    const asset = await env.ASSETS.get(`assets/${assetPath}`)
     if (asset) {
       const contentType = getContentType(assetPath)
-      return new Response(asset.body, {
-        headers: { 'Content-Type': contentType }
+      return new Response(asset, {
+        headers: { 
+          'Content-Type': contentType,
+          'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
+        }
       })
     }
   } catch (error) {
-    console.error('Asset not found:', assetPath)
+    console.error('Asset not found in KV:', assetPath, error)
   }
   
   return new Response('Asset not found', { status: 404 })
@@ -129,15 +144,30 @@ async function handleSubmit(request, env) {
     const pdfs = []
     const accessCodes = {}
     
-    for (const activity of activities) {
+    // Process activities sequentially to avoid rate limits
+    for (let i = 0; i < activities.length; i++) {
+      const activity = activities[i]
       const accessCode = generateAccessCode()
       accessCodes[activity] = accessCode
       
-      const pdf = await renderPdf(activity, { property, checkinDate, name, initials, signature }, accessCode, env)
-      const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.split(' ').pop()}-${name.split(' ')[0]}-${submissionId}.pdf`
-      
-      await env.PDF_STORAGE.put(key, pdf)
-      pdfs.push({ activity, key, accessCode })
+      try {
+        console.log(`Generating PDF ${i + 1}/${activities.length} for activity: ${activity}`)
+        
+        const pdf = await renderPdf(activity, { property, checkinDate, name, initials, signature }, accessCode, env)
+        const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${submissionId}.pdf`
+        
+        await env.PDF_STORAGE.put(key, pdf)
+        pdfs.push({ activity, key, accessCode })
+        
+        // Add delay between PDF generations to avoid rate limits
+        if (i < activities.length - 1) {
+          console.log('Waiting 2 seconds before generating next PDF...')
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+        
+      } catch (error) {
+        console.error(`Failed to generate PDF for activity ${activity}:`, error.message)
+      }
     }
 
     await env.DB.prepare(`
