@@ -23,6 +23,7 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
    - **Account**: `Cloudflare Workers:Edit`
    - **Account**: `Account Settings:Read`
    - **User**: `User Details:Read`
+   - **User**: `Memberships:Read`
    - **Zone**: `Zone:Read` (if using custom domain)
 5. Copy the token
 
