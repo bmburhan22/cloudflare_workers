@@ -27,15 +27,23 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
    - **Zone**: `Zone:Read` (if using custom domain)
 5. Copy the token
 
-### 2. Add GitHub Secret
+### 2. Get Cloudflare Account ID
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
+2. Select your account
+3. Copy your **Account ID** from the right sidebar
+
+### 3. Add GitHub Secrets
 
 In your GitHub repository:
 1. Go to **Settings** → **Secrets and variables** → **Actions**
-2. Add new repository secret:
+2. Add these repository secrets:
    - **Name**: `CLOUDFLARE_API_TOKEN`
    - **Value**: Your Cloudflare API token
+   - **Name**: `CLOUDFLARE_ACCOUNT_ID`
+   - **Value**: Your Cloudflare account ID
 
-### 3. Deploy Pipeline
+### 4. Deploy Pipeline
 
 The GitHub Actions workflow automatically:
 1. ✅ **Applies D1 schema changes** (`schema.sql`)
