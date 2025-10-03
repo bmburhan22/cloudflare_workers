@@ -2,11 +2,7 @@ export function generateId() {
   return new Date().getTime().toString()
 }
 
-export function generateAccessCode() {
-  return Math.floor(1000 + Math.random() * 9000).toString()
-}
-
-export async function renderPdf(activity, data, accessCode, env) {
+export async function renderPdf(activity, data, pin, env) {
   try {
     // Create HTML content for PDF generation
     const html = `
@@ -153,13 +149,15 @@ export async function renderPdf(activity, data, accessCode, env) {
           <div class="paragraph">
             <strong>Date:</strong> ${new Date().toLocaleDateString()}
           </div>
-          
+
+          ${pin ? `
           <div class="access-code">
-            <div>${activity.charAt(0).toUpperCase() + activity.slice(1)} Access Code: ${accessCode}</div>
+            <div>Archery Access PIN: ${pin}</div>
             <div style="font-size: 10px; margin-top: 5px;">
-              Use this code to access the ${activity} area
+              Use this PIN to access the archery area
             </div>
           </div>
+          ` : ''}
         </div>
 
         <div class="footer">
@@ -213,15 +211,13 @@ export async function renderPdf(activity, data, accessCode, env) {
   }
 }
 
-export async function sendEmail(env, email, name, pdfs, accessCodes) {
+export async function sendEmail(env, email, name, pdfs, archeryPin) {
   try {
-    // Check if Cloudflare Email binding is configured
     if (!env.SEND_EMAIL) {
       console.error('Cloudflare Email binding is not configured')
       return { success: false, message: 'Email service not configured. Please add SEND_EMAIL binding to wrangler.toml.' }
     }
 
-    // Import required modules for Cloudflare Email
     const { EmailMessage } = await import('cloudflare:email')
     const { createMimeMessage } = await import('mimetext')
 
@@ -231,37 +227,24 @@ export async function sendEmail(env, email, name, pdfs, accessCodes) {
         <h2>Activity Waiver Confirmation</h2>
         <p>Dear ${name},</p>
         <p>Thank you for completing your activity waivers. Your documents have been processed successfully.</p>
-        
-      <h3>Activities Covered:</h3>
-      <ul>
-        ${pdfs.map(pdf => {
-          if (pdf.error) {
-            return `<li>${pdf.activity} <span style="color: #d63031;">(Failed to generate document)</span></li>`
-          }
-          return `<li>${pdf.activity}</li>`
-        }).join('')}
-      </ul>
-      
-      ${pdfs.some(pdf => pdf.error) ? `
-        <div style="background: #ffebee; border: 1px solid #f44336; padding: 15px; margin: 20px 0; border-radius: 4px;">
-          <h3 style="color: #d63031; margin-top: 0;">Note:</h3>
-          <p>Some documents could not be generated due to system limitations. You can still access the activities using your access codes below.</p>
-        </div>
-      ` : ''}
-        
+
+        <h3>Activities Covered:</h3>
+        <ul>
+          ${pdfs.map(pdf => `<li>${pdf.activity.charAt(0).toUpperCase() + pdf.activity.slice(1)}</li>`).join('')}
+        </ul>
+
+        ${archeryPin ? `
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
-          <h3 style="color: #d63031; margin-top: 0;">Access Codes:</h3>
-          ${Object.entries(accessCodes).map(([activity, code]) => 
-            `<p><strong>${activity.charAt(0).toUpperCase() + activity.slice(1)}:</strong> ${code}</p>`
-          ).join('')}
-          <p><small>Use these codes to access the respective activity areas during your stay.</small></p>
+          <h3 style="color: #d63031; margin-top: 0;">Archery Access PIN:</h3>
+          <p style="font-size: 24px; font-weight: bold; color: #d63031;">${archeryPin}</p>
+          <p><small>Use this PIN to access the archery area during your stay.</small></p>
         </div>
-        
-        <p>Please find your signed waiver documents attached to this email. If you receive HTML files, you can open them in your browser and use Ctrl+P to save as PDF.</p>
-        ${pdfs.some(pdf => pdf.error) ? `<p><strong>Note:</strong> Some documents could not be generated due to system limitations, but your access codes are still valid.</p>` : ''}
+        ` : ''}
+
+        <p>Please find your signed waiver documents attached to this email.</p>
         <p>Please keep this email for your records.</p>
         <p>Have a great time!</p>
-        
+
         <hr style="margin: 30px 0;">
         <p style="font-size: 12px; color: #666;">
           This email was automatically generated. Please do not reply to this message.

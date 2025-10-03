@@ -1,17 +1,9 @@
-import { renderPdf, sendEmail, generateId, generateAccessCode } from './utils.js'
+import { renderPdf, sendEmail, generateId } from './utils.js'
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
     const method = request.method
-
-    if (method === 'GET' && url.pathname === '/') {
-      return handleIndexHtml(env)
-    }
-
-    if (method === 'GET' && url.pathname.startsWith('/assets/')) {
-      return handleAssets(request, env)
-    }
 
     if (method === 'POST' && url.pathname === '/submit') {
       return handleSubmit(request, env)
@@ -31,108 +23,13 @@ export default {
   }
 }
 
-async function handleIndexHtml(env) {
-  try {
-    const indexHtml = await env.ASSETS.get('index.html')
-    if (indexHtml) {
-      return new Response(indexHtml, {
-        headers: { 'Content-Type': 'text/html' }
-      })
-    }
-  } catch (error) {
-    console.error('Error loading index.html from KV:', error)
-  }
-  
-  // Fallback to basic HTML if KV file not found
-  return new Response(`<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Activity Waiver System</title>
-    <link rel="stylesheet" href="/assets/index.css" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/assets/index.js"></script>
-  </body>
-</html>`, {
-    headers: { 'Content-Type': 'text/html' }
-  })
-}
-
-async function handleAssets(request, env) {
-  const url = new URL(request.url)
-  const assetPath = url.pathname.replace('/assets/', '')
-  
-  try {
-    const asset = await env.ASSETS.get(`assets/${assetPath}`)
-    if (asset) {
-      const contentType = getContentType(assetPath)
-      return new Response(asset, {
-        headers: { 
-          'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=31536000' // Cache for 1 year
-        }
-      })
-    }
-  } catch (error) {
-    console.error('Asset not found in KV:', assetPath, error)
-  }
-  
-  return new Response('Asset not found', { status: 404 })
-}
-
-function getContentType(path) {
-  if (path.endsWith('.js')) return 'application/javascript'
-  if (path.endsWith('.css')) return 'text/css'
-  if (path.endsWith('.html')) return 'text/html'
-  return 'application/octet-stream'
-}
-
 async function handleSubmit(request, env) {
   try {
     const data = await request.json()
-    const { property, checkinDate, name, email, activities, initials, signature } = data
+    const { property, checkinDate, name, email, activities, activityInitials, signature } = data
 
-    if (!property || !checkinDate || !name || !email || !activities?.length || !initials || !signature) {
+    if (!property || !checkinDate || !name || !email || !activities?.length || !activityInitials || !signature) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
-    }
-
-    const existingSubmission = await env.DB.prepare(`
-      SELECT s.*, d.activity, d.storage_key, d.access_code
-      FROM submissions s
-      LEFT JOIN documents d ON s.id = d.submission_id
-      WHERE s.name = ? AND s.email = ? AND s.property = ? AND s.checkin_date = ?
-      ORDER BY s.created_at DESC
-      LIMIT 1
-    `).bind(name, email, property, checkinDate).all()
-
-    if (existingSubmission.results.length > 0) {
-      const submission = existingSubmission.results[0]
-      const existingDocs = existingSubmission.results.filter(r => r.activity)
-      
-      const existingAccessCodes = {}
-      const existingPdfs = []
-      
-      for (const doc of existingDocs) {
-        if (activities.includes(doc.activity)) {
-          existingAccessCodes[doc.activity] = doc.access_code
-          existingPdfs.push({
-            activity: doc.activity,
-            key: doc.storage_key,
-            accessCode: doc.access_code
-          })
-        }
-      }
-
-      const emailResult = await sendEmail(env, email, name, existingPdfs, existingAccessCodes)
-
-      return new Response(JSON.stringify({
-        success: emailResult.success,
-        accessCodes: existingAccessCodes,
-        message: emailResult.success ? 'Email sent with existing PDFs and access codes' : `Email failed: ${emailResult.message}`
-      }), { headers: { 'Content-Type': 'application/json' } })
     }
 
     const submissionId = generateId()
@@ -142,52 +39,50 @@ async function handleSubmit(request, env) {
     const day = String(date.getDate()).padStart(2, '0')
 
     const pdfs = []
-    const accessCodes = {}
-    
-    // Process activities sequentially to avoid rate limits
+    const hasArchery = activities.includes('archery')
+    const archeryPin = hasArchery ? env.ARCHERY_PIN : null
+
     for (let i = 0; i < activities.length; i++) {
       const activity = activities[i]
-      const accessCode = generateAccessCode()
-      accessCodes[activity] = accessCode
-      
+      const pin = activity === 'archery' ? env.ARCHERY_PIN : null
+
       try {
         console.log(`Generating PDF ${i + 1}/${activities.length} for activity: ${activity}`)
-        
-        const pdf = await renderPdf(activity, { property, checkinDate, name, initials, signature }, accessCode, env)
+
+        const pdf = await renderPdf(activity, { property, checkinDate, name, initials: activityInitials[activity], signature }, pin, env)
         const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${submissionId}.pdf`
-        
+
         await env.PDF_STORAGE.put(key, pdf)
-        pdfs.push({ activity, key, accessCode })
-        
-        // Add delay between PDF generations to avoid rate limits
+        pdfs.push({ activity, key })
+
         if (i < activities.length - 1) {
           console.log('Waiting 2 seconds before generating next PDF...')
           await new Promise(resolve => setTimeout(resolve, 2000))
         }
-        
+
       } catch (error) {
         console.error(`Failed to generate PDF for activity ${activity}:`, error.message)
       }
     }
 
     await env.DB.prepare(`
-      INSERT INTO submissions (id, property, checkin_date, name, email, activities, initials, signature, created_at)
+      INSERT INTO submissions (id, property, checkin_date, name, email, activities, activity_initials, signature, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(submissionId, property, checkinDate, name, email, JSON.stringify(activities), initials, signature, new Date().toISOString()).run()
+    `).bind(submissionId, property, checkinDate, name, email, JSON.stringify(activities), JSON.stringify(activityInitials), signature, new Date().toISOString()).run()
 
     for (const pdf of pdfs) {
       await env.DB.prepare(`
-        INSERT INTO documents (submission_id, activity, storage_key, access_code, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).bind(submissionId, pdf.activity, pdf.key, pdf.accessCode, new Date().toISOString()).run()
+        INSERT INTO documents (submission_id, activity, storage_key, created_at)
+        VALUES (?, ?, ?, ?)
+      `).bind(submissionId, pdf.activity, pdf.key, new Date().toISOString()).run()
     }
 
-    const emailResult = await sendEmail(env, email, name, pdfs, accessCodes)
+    const emailResult = await sendEmail(env, email, name, pdfs, archeryPin)
 
     return new Response(JSON.stringify({
       success: emailResult.success,
-      accessCodes: accessCodes,
-      message: emailResult.success ? 'Email sent with PDFs and access codes' : `Email failed: ${emailResult.message}`
+      archeryPin: hasArchery ? archeryPin : null,
+      message: emailResult.success ? 'Email sent successfully' : `Email failed: ${emailResult.message}`
     }), { headers: { 'Content-Type': 'application/json' } })
 
   } catch (error) {

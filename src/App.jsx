@@ -103,10 +103,10 @@ function App() {
     checkinDate: '',
     name: '',
     email: '',
-    initials: '',
     signature: ''
   })
   const [selectedActivities, setSelectedActivities] = useState([])
+  const [activityInitials, setActivityInitials] = useState({})
   const [masterAccept, setMasterAccept] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [success, setSuccess] = useState(null)
@@ -116,18 +116,45 @@ function App() {
   }
 
   const handleActivityChange = (activityId) => {
-    setSelectedActivities(prev => 
-      prev.includes(activityId) 
-        ? prev.filter(id => id !== activityId)
-        : [...prev, activityId]
-    )
+    setSelectedActivities(prev => {
+      if (prev.includes(activityId)) {
+        const newInitials = { ...activityInitials }
+        delete newInitials[activityId]
+        setActivityInitials(newInitials)
+        return prev.filter(id => id !== activityId)
+      }
+      return [...prev, activityId]
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedActivities.length === activities.length) {
+      setSelectedActivities([])
+      setActivityInitials({})
+    } else {
+      setSelectedActivities(activities.map(a => a.id))
+    }
+  }
+
+  const handleInitialsChange = (activityId, value) => {
+    setActivityInitials(prev => ({ ...prev, [activityId]: value }))
+  }
+
+  const isFormValid = () => {
+    return selectedActivities.length > 0 &&
+           selectedActivities.every(id => activityInitials[id]?.trim())
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (selectedActivities.length === 0) {
       alert('Please select at least one activity')
+      return
+    }
+
+    if (!isFormValid()) {
+      alert('Please enter initials for all selected activities')
       return
     }
 
@@ -139,7 +166,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          activities: selectedActivities
+          activities: selectedActivities,
+          activityInitials
         })
       })
 
@@ -164,23 +192,34 @@ function App() {
           <h1>Activity Waiver System</h1>
           <p>Complete your activity waivers and get instant access codes</p>
         </div>
-        
+
         <div className="form-container">
           <div className="success">
             <h2>🎉 Success!</h2>
             <p className="success-message">{success.message}</p>
-            
-            {success.accessCodes && Object.keys(success.accessCodes).length > 0 && (
+
+            {success.archeryPin && (
               <div className="access-codes">
-                <h3>🔑 Your Access Codes</h3>
-                {Object.entries(success.accessCodes).map(([activity, code]) => (
-                  <div key={activity} className="code-item">
-                    <div><strong>{activity.charAt(0).toUpperCase() + activity.slice(1)}:</strong></div>
-                    <div className="code-value">{code}</div>
+                <h3>🎯 Archery Access PIN</h3>
+                <div className="code-item">
+                  <div className="code-value" style={{ fontSize: '32px', fontWeight: 'bold', color: '#d63031' }}>
+                    {success.archeryPin}
                   </div>
-                ))}
+                  <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
+                    Use this PIN to access the archery area
+                  </p>
+                </div>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="submit-btn"
+              style={{ marginTop: '20px' }}
+            >
+              ← Submit Another Waiver
+            </button>
           </div>
         </div>
       </div>
@@ -259,21 +298,71 @@ function App() {
           <div className="form-group">
             <label>Select Activities</label>
             <div className="activities">
-              {activities.map(activity => (
-                <label key={activity.id} className="activity-item">
-                  <input
-                    type="checkbox"
-                    value={activity.id}
-                    checked={selectedActivities.includes(activity.id)}
-                    onChange={() => handleActivityChange(activity.id)}
-                  />
-                  <span>{activity.name}</span>
-                  {selectedActivities.includes(activity.id) && (
-                    <div className="risk-text">{activity.risk}</div>
-                  )}
-                </label>
-              ))}
+              {activities.map(activity => {
+                const isSelected = selectedActivities.includes(activity.id)
+                return (
+                  <div
+                    key={activity.id}
+                    className="activity-item"
+                    style={{
+                      borderColor: isSelected ? '#667eea' : '#e5e7eb',
+                      background: isSelected ? 'white' : '#f9fafb',
+                      flexDirection: 'column',
+                      alignItems: 'stretch'
+                    }}
+                    onClick={() => handleActivityChange(activity.id)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                      <span>{activity.name}</span>
+                    </div>
+                    {isSelected && (
+                      <>
+                        <div className="risk-text">{activity.risk}</div>
+                        <input
+                          type="text"
+                          value={activityInitials[activity.id] || ''}
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            handleInitialsChange(activity.id, e.target.value)
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Enter initials (e.g., JD)"
+                          required
+                          maxLength={5}
+                          style={{ marginTop: '12px', fontSize: '14px' }}
+                        />
+                      </>
+                    )}
+                  </div>
+                )
+              })}
             </div>
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              style={{
+                marginTop: '15px',
+                padding: '12px 24px',
+                background: selectedActivities.length === activities.length ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '14px',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseOver={(e) => e.target.style.transform = 'translateY(-1px)'}
+              onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+            >
+              {selectedActivities.length === activities.length ? '✕ Clear All' : '✓ Select All'}
+            </button>
           </div>
 
           <div className="form-group">
@@ -289,23 +378,10 @@ function App() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="initials">Initials for Selected Activities</label>
-            <input
-              type="text"
-              id="initials"
-              name="initials"
-              value={formData.initials}
-              onChange={handleInputChange}
-              placeholder="Enter your initials (e.g., JD)"
-              required
-            />
-          </div>
-
-          <div className="form-group">
             <SignaturePad onSignatureChange={(signature) => setFormData({ ...formData, signature })} />
           </div>
 
-          <button type="submit" className="submit-btn" disabled={isSubmitting}>
+          <button type="submit" className="submit-btn" disabled={isSubmitting || !isFormValid()}>
             {isSubmitting ? (
               <>
                 <span className="loading"></span> Processing...

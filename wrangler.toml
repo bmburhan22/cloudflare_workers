@@ -4,6 +4,9 @@ compatibility_date = "2024-09-23"
 
 compatibility_flags = ["nodejs_compat"]
 
+[assets]
+directory = "./dist"
+
 [browser]
 binding = "BROWSER"
 
@@ -18,14 +21,6 @@ bucket_name = "waiver-pdfs"
 binding = "DB"
 database_name = "waiver-db"
 database_id = "9af8c837-9326-4723-9a5c-f048870aed7e"
-
-[[kv_namespaces]]
-binding = "CONFIG"
-id = "839815e215af46048bc18e3c886756f0"
-
-[[kv_namespaces]]
-binding = "ASSETS"
-id = "fa78fe4ba2f940d981f01ae62d593420"
 
 [vars]
 EMAIL_FROM = "noreply@bm-burhan22.workers.dev"
