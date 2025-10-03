@@ -173,22 +173,38 @@ export async function renderPdf(activity, data, pin, env) {
     if (env && env.BROWSER) {
       try {
         const puppeteer = await import('@cloudflare/puppeteer')
-        const browser = await puppeteer.launch(env.BROWSER)
+        const browser = await puppeteer.launch(env.BROWSER, {
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor'
+          ]
+        })
         const page = await browser.newPage()
         
-        // Set the HTML content
-        await page.setContent(html)
+        // Optimize page settings for speed
+        await page.setViewport({ width: 800, height: 600 })
+        await page.setJavaScriptEnabled(false) // Disable JS for faster rendering
         
-        // Generate PDF with options
+        // Set the HTML content
+        await page.setContent(html, { waitUntil: 'networkidle0' })
+        
+        // Generate PDF with optimized settings for speed
         const pdf = await page.pdf({
           format: 'A4',
           margin: {
-            top: '40px',
-            right: '40px',
-            bottom: '40px',
-            left: '40px'
+            top: '20px',
+            right: '20px', 
+            bottom: '20px',
+            left: '20px'
           },
-          printBackground: true
+          printBackground: false, // Disable for speed
+          preferCSSPageSize: false, // Disable for speed
+          displayHeaderFooter: false, // Disable for speed
+          scale: 0.8 // Smaller scale for faster rendering
         })
         
         // Close browser
