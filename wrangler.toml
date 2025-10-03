@@ -28,5 +28,5 @@ binding = "ASSETS"
 id = "fa78fe4ba2f940d981f01ae62d593420"
 
 [vars]
-EMAIL_FROM = "noreply@workers.dev"
+EMAIL_FROM = "noreply@bm-burhan22.workers.dev"
 LEGAL_VERSION = "v1.0"
