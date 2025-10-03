@@ -21,6 +21,7 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 3. Use **"Custom token"** template
 4. Set permissions:
    - **Account**: `Cloudflare Workers:Edit`
+   - **User**: `User Details:Read`
    - **Zone**: `Zone:Read` (if using custom domain)
 5. Copy the token
 
