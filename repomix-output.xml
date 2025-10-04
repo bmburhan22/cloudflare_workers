@@ -86,6 +86,53 @@ Once you receive money, please share github repo to vitaliy.hayda@gmail.com and 
 npx repomix@latest
 </file>
 
+<file path="index.html">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Activity Waiver System</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="src/main.jsx">
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+</file>
+
+<file path="vite.config.js">
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
+      }
+    }
+  }
+})
+</file>
+
 <file path=".gitignore">
 # Dependencies
 node_modules/
@@ -192,19 +239,33 @@ temp/
 .tern-port
 </file>
 
-<file path="index.html">
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Activity Waiver System</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+<file path="schema.sql">
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS submissions;
+
+CREATE TABLE submissions (
+  id TEXT PRIMARY KEY,
+  property TEXT NOT NULL,
+  checkin_date TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  activities TEXT NOT NULL,
+  activity_initials TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id TEXT NOT NULL,
+  activity TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (submission_id) REFERENCES submissions (id)
+);
+
+CREATE INDEX idx_submissions_lookup ON submissions (name, email, property, checkin_date);
+CREATE INDEX idx_documents_submission ON documents (submission_id);
 </file>
 
 <file path="src/index.css">
@@ -502,68 +563,64 @@ input:focus, select:focus {
   .header h1 {
     font-size: 2rem;
   }
+  .signature-pad {
+    width: 100%;
+    height: 150px;
+  }
 }
 </file>
 
-<file path="src/main.jsx">
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
-</file>
-
-<file path="vite.config.js">
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-    rollupOptions: {
-      output: {
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
+<file path="test-pdf.js">
+import { renderPdf, generateId, generateAccessCode } from './utils.js'
+import { writeFileSync } from 'fs'
+async function testPdfGeneration() {
+  console.log('🧪 Testing PDF generation...')
+  
+  try {
+    // Test data
+    const testData = {
+      property: 'Test Resort',
+      checkinDate: '2024-01-15',
+      name: 'John Doe',
+      initials: 'JD',
+      signature: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjAwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZjBmMGYwIiBzdHJva2U9IiMzMzMiLz4KPHRleHQgeD0iMTAwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjMzMzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Kb2huIERvZTwvdGV4dD4KPC9zdmc+'
     }
+    
+    const activity = 'kayaking'
+    const accessCode = generateAccessCode()
+    
+    console.log('📝 Generating PDF for:', activity)
+    console.log('👤 Participant:', testData.name)
+    console.log('🏨 Property:', testData.property)
+    console.log('🔑 Access Code:', accessCode)
+    
+    // Generate the PDF (will return HTML for local testing)
+    const pdfContent = await renderPdf(activity, testData, accessCode)
+    
+    // Save to file
+    const filename = `test-waiver-${activity}-${Date.now()}.html`
+    writeFileSync(filename, pdfContent)
+    
+    console.log('✅ HTML generated successfully!')
+    console.log(`📄 File saved as: ${filename}`)
+    console.log('🌐 Open the file in your browser and use Ctrl+P to save as PDF')
+    console.log('📝 Note: In Cloudflare Workers, this will generate a real PDF file')
+    console.log('')
+    console.log('📋 Test Summary:')
+    console.log(`   - Activity: ${activity}`)
+    console.log(`   - Participant: ${testData.name}`)
+    console.log(`   - Property: ${testData.property}`)
+    console.log(`   - Access Code: ${accessCode}`)
+    console.log(`   - File: ${filename}`)
+    
+  } catch (error) {
+    console.error('❌ Error generating PDF:', error.message)
+    console.error('Stack trace:', error.stack)
   }
-})
-</file>
+}
 
-<file path="schema.sql">
-DROP TABLE IF EXISTS documents;
-DROP TABLE IF EXISTS submissions;
-
-CREATE TABLE submissions (
-  id TEXT PRIMARY KEY,
-  property TEXT NOT NULL,
-  checkin_date TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  activities TEXT NOT NULL,
-  activity_initials TEXT NOT NULL,
-  signature TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE documents (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  submission_id TEXT NOT NULL,
-  activity TEXT NOT NULL,
-  storage_key TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (submission_id) REFERENCES submissions (id)
-);
-
-CREATE INDEX idx_submissions_lookup ON submissions (name, email, property, checkin_date);
-CREATE INDEX idx_documents_submission ON documents (submission_id);
+// Run the test
+testPdfGeneration()
 </file>
 
 <file path="src/App.jsx">
@@ -635,8 +692,8 @@ function SignaturePad({ onSignatureChange }) {
       <label className="signature-label">Digital Signature</label>
       <canvas
         ref={canvasRef}
-        width={400}
-        height={200}
+        width={700}
+        height={150}
         className="signature-pad"
         onMouseDown={startDrawing}
         onMouseMove={draw}
@@ -783,7 +840,7 @@ function App() {
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => setSuccess(null)}
               className="submit-btn"
               style={{ marginTop: '20px' }}
             >
@@ -968,59 +1025,6 @@ function App() {
 export default App
 </file>
 
-<file path="test-pdf.js">
-import { renderPdf, generateId, generateAccessCode } from './utils.js'
-import { writeFileSync } from 'fs'
-async function testPdfGeneration() {
-  console.log('🧪 Testing PDF generation...')
-  
-  try {
-    // Test data
-    const testData = {
-      property: 'Test Resort',
-      checkinDate: '2024-01-15',
-      name: 'John Doe',
-      initials: 'JD',
-      signature: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjAwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZjBmMGYwIiBzdHJva2U9IiMzMzMiLz4KPHRleHQgeD0iMTAwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjMzMzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Kb2huIERvZTwvdGV4dD4KPC9zdmc+'
-    }
-    
-    const activity = 'kayaking'
-    const accessCode = generateAccessCode()
-    
-    console.log('📝 Generating PDF for:', activity)
-    console.log('👤 Participant:', testData.name)
-    console.log('🏨 Property:', testData.property)
-    console.log('🔑 Access Code:', accessCode)
-    
-    // Generate the PDF (will return HTML for local testing)
-    const pdfContent = await renderPdf(activity, testData, accessCode)
-    
-    // Save to file
-    const filename = `test-waiver-${activity}-${Date.now()}.html`
-    writeFileSync(filename, pdfContent)
-    
-    console.log('✅ HTML generated successfully!')
-    console.log(`📄 File saved as: ${filename}`)
-    console.log('🌐 Open the file in your browser and use Ctrl+P to save as PDF')
-    console.log('📝 Note: In Cloudflare Workers, this will generate a real PDF file')
-    console.log('')
-    console.log('📋 Test Summary:')
-    console.log(`   - Activity: ${activity}`)
-    console.log(`   - Participant: ${testData.name}`)
-    console.log(`   - Property: ${testData.property}`)
-    console.log(`   - Access Code: ${accessCode}`)
-    console.log(`   - File: ${filename}`)
-    
-  } catch (error) {
-    console.error('❌ Error generating PDF:', error.message)
-    console.error('Stack trace:', error.stack)
-  }
-}
-
-// Run the test
-testPdfGeneration()
-</file>
-
 <file path=".github/workflows/deploy.yml">
 name: Deploy Worker
 
@@ -1065,6 +1069,40 @@ jobs:
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+</file>
+
+<file path="package.json">
+{
+  "name": "waiver-system",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:pdf": "node test-pdf.js",
+    "db:init:local": "npx wrangler d1 execute DB --file=schema.sql",
+    "db:init:remote": "npx wrangler d1 execute DB --file=schema.sql --remote",
+    "wrangler:deploy": "npm run build && wrangler deploy",
+    "wrangler:dev": "npm run build && wrangler dev"
+  },
+  "dependencies": {
+    "mimetext": "^3.0.27",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^7.1.8",
+    "wrangler": "^4.40.3"
+  }
+}
 </file>
 
 <file path="utils.js">
@@ -1546,40 +1584,6 @@ async function handleAdminSearch(request, env) {
   return new Response(JSON.stringify({ results: results.results }), {
     headers: { 'Content-Type': 'application/json' }
   })
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "waiver-system",
-  "version": "1.0.0",
-  "type": "module",
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test:pdf": "node test-pdf.js",
-    "db:init:local": "npx wrangler d1 execute DB --file=schema.sql",
-    "db:init:remote": "npx wrangler d1 execute DB --file=schema.sql --remote",
-    "wrangler:deploy": "npm run build && wrangler deploy",
-    "wrangler:dev": "npm run build && wrangler dev"
-  },
-  "dependencies": {
-    "mimetext": "^3.0.27",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@cloudflare/puppeteer": "^1.0.4",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^7.1.8",
-    "wrangler": "^4.40.3"
-  }
 }
 </file>
 
