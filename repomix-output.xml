@@ -1260,10 +1260,6 @@ export default {
       return jsonResponse({ status: 'ok' })
     }
 
-    if (method === 'GET' && pathname === '/test-email') {
-      return jsonResponse(await sendEmail(env, searchParams.get('email'), '', []))
-    }
-
     return new Response('Not Found', { status: 404 })
   }
 }
@@ -1382,7 +1378,7 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 - **Single-page React app** with modern ES2025
 - **Parallel PDF generation** using Cloudflare Browser Rendering API
 - **Background processing** for instant user feedback
-- **Email delivery** with PDF attachments via Cloudflare Email
+- **Email delivery** with PDF attachments via Resend API
 - **D1 database** for submissions tracking
 - **R2 storage** for PDF files
 - **Assets binding** for static files (no KV needed)
@@ -1398,10 +1394,16 @@ wrangler secret put RESEND_API_KEY
 wrangler secret put EMAIL_FROM
 wrangler secret put ARCHERY_PIN
 
-# Deploy (migrations + build + deploy)
+# Build for production (migrations + vite build)
+npm run build
+
+# Build for local (migrations + vite build)
+npm run build:local
+
+# Deploy to Cloudflare Workers
 npm run deploy
 
-# Local development (migrations + build + dev server)
+# Local development server
 npm run dev
 ```
 
@@ -1486,7 +1488,7 @@ npm run db:migrations:create migration_name
 
 ### Applying Migrations
 
-Migrations run automatically with `npm run dev` (local) and `npm run deploy` (remote).
+Migrations run automatically with `npm run build` (remote) and `npm run build:local` (local).
 
 Manual commands:
 ```bash
@@ -1512,27 +1514,21 @@ ALTER TABLE submissions ADD COLUMN phone TEXT;
 CREATE INDEX IF NOT EXISTS idx_submissions_phone ON submissions (phone);
 ```
 
-## 📧 Email Configuration
+## 🔌 API Endpoints
 
-The system uses **Resend** for email delivery:
+- **POST /submit** - Submit waiver form with activity selections
+- **GET /status** - Health check endpoint
+- **GET /admin/search?q=query** - Search submissions by name, email, property, or check-in date
 
-1. Sign up at [resend.com](https://resend.com)
-2. Verify your domain
-3. Create an API key
-4. Set secrets:
+## 📧 Email Setup
+
+1. Sign up at [resend.com](https://resend.com) and verify your domain
+2. Create an API key
+3. Set secrets:
    ```bash
    wrangler secret put RESEND_API_KEY
-   # Enter: re_xxxxxxxxxxxxx
-
    wrangler secret put EMAIL_FROM
-   # Enter: noreply@yourdomain.com
    ```
-
-**Why Resend?**
-- Simple REST API, no complex bindings
-- Better deliverability
-- Easy domain verification
-- Free tier: 100 emails/day
 </file>
 
 <file path="package.json">

@@ -59,10 +59,6 @@ export default {
       return jsonResponse({ status: 'ok' })
     }
 
-    if (method === 'GET' && pathname === '/test-email') {
-      return jsonResponse(await sendEmail(env, searchParams.get('email'), '', []))
-    }
-
     return new Response('Not Found', { status: 404 })
   }
 }
