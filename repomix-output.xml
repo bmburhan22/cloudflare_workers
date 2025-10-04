@@ -69,7 +69,6 @@ Implement everything on Cloudflare with minimal code and no servers: a single Wo
 Code must be DRY, modern ES2025 and without code comments. Minimal (ideally none) libraries and minimum files.
 `
 
- Will reply in full in a few hours. For now please make sure it is optimized:
 - Parallel puppeteer browsers
 - No KV store for most things as it messes with review of multiple branches
 - GitHub connected to Cloudflare worker in settings for auto builds
@@ -1527,14 +1526,11 @@ async function handleAdminSearch(request, env) {
     "db:migrations:create": "npx wrangler d1 migrations create DB"
   },
   "dependencies": {
-    "mimetext": "^3.0.27",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@cloudflare/puppeteer": "^1.0.4",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.0.0",
     "vite": "^7.1.8",
     "wrangler": "^4.40.3"
