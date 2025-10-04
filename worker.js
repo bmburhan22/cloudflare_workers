@@ -20,8 +20,11 @@ export default {
     }
 
     if (method === 'GET' && url.pathname === '/test-email') {
-      await sendEmail(env, url.searchParams.get('email'),'',[] )
-      return new Response("ok")
+      return new Response(
+        JSON.stringify(
+          await sendEmail(env, url.searchParams.get('email'), '', [])
+        )
+      )
     }
 
     return new Response('Not Found', { status: 404 })
@@ -83,34 +86,34 @@ async function handleSubmit(request, env, ctx) {
 
 async function processPdfsAndEmail(env, data) {
   const { submissionId, property, checkinDate, name, email, activities, activityInitials, signature, year, month, day, archeryPin } = data
-  
+
   try {
     console.log(`Starting parallel PDF generation for ${activities.length} activities`)
-    
+
     // Generate all PDFs in parallel
     const pdfPromises = activities.map(async (activity, index) => {
       const pin = activity === 'archery' ? archeryPin : null
       const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${submissionId}.pdf`
-      
+
       try {
         console.log(`Generating PDF ${index + 1}/${activities.length} for activity: ${activity}`)
-        
-        const pdf = await renderPdf(activity, { 
-          property, 
-          checkinDate, 
-          name, 
-          initials: activityInitials[activity], 
-          signature 
+
+        const pdf = await renderPdf(activity, {
+          property,
+          checkinDate,
+          name,
+          initials: activityInitials[activity],
+          signature
         }, pin, env)
-        
+
         await env.PDF_STORAGE.put(key, pdf)
-        
+
         // Save document record
         await env.DB.prepare(`
           INSERT INTO documents (submission_id, activity, storage_key, created_at)
           VALUES (?, ?, ?, ?)
         `).bind(submissionId, activity, key, new Date().toISOString()).run()
-        
+
         return { activity, key, success: true }
       } catch (error) {
         console.error(`Failed to generate PDF for activity ${activity}:`, error.message)
@@ -121,9 +124,9 @@ async function processPdfsAndEmail(env, data) {
     // Wait for all PDFs to complete
     const pdfResults = await Promise.all(pdfPromises)
     const successfulPdfs = pdfResults.filter(pdf => pdf.success)
-    
+
     console.log(`PDF generation complete: ${successfulPdfs.length}/${activities.length} successful`)
-    
+
     // Send email with all successful PDFs
     if (successfulPdfs.length > 0) {
       const emailResult = await sendEmail(env, email, name, successfulPdfs, archeryPin)
@@ -131,7 +134,7 @@ async function processPdfsAndEmail(env, data) {
     } else {
       console.error('No PDFs were generated successfully, skipping email')
     }
-    
+
   } catch (error) {
     console.error('Error in async PDF processing:', error)
   }
@@ -140,13 +143,13 @@ async function processPdfsAndEmail(env, data) {
 async function handleAdminSearch(request, env) {
   const url = new URL(request.url)
   const query = url.searchParams.get('q')
-  
+
   if (!query) {
     return new Response(JSON.stringify({ error: 'Query parameter required' }), { status: 400 })
   }
 
   const results = await env.DB.prepare(`
-    SELECT * FROM submissions 
+    SELECT * FROM submissions
     WHERE name LIKE ? OR email LIKE ? OR property LIKE ? OR checkin_date LIKE ?
     ORDER BY created_at DESC
     LIMIT 50

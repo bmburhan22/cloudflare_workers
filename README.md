@@ -57,6 +57,7 @@ The GitHub Actions workflow automatically:
 npm install
 
 # Set secrets (first time only)
+wrangler secret put RESEND_API_KEY
 wrangler secret put EMAIL_FROM
 wrangler secret put ARCHERY_PIN
 
@@ -97,6 +98,10 @@ npm run wrangler:deploy
 ### Secrets (use `wrangler secret put`)
 
 ```bash
+# Set Resend API key
+wrangler secret put RESEND_API_KEY
+# Enter: re_xxxxxxxxxxxxx
+
 # Set email sender address
 wrangler secret put EMAIL_FROM
 # Enter: noreply@yourdomain.com
@@ -136,16 +141,22 @@ VERSION = "1.0"
 
 ## 📧 Email Configuration
 
-The system uses **Cloudflare Email Sending**:
+The system uses **Resend** for email delivery:
 
-1. Verify your domain in Cloudflare Dashboard → Email Routing
-2. Set the sender address as a secret:
+1. Sign up at [resend.com](https://resend.com)
+2. Verify your domain
+3. Create an API key
+4. Set secrets:
    ```bash
+   wrangler secret put RESEND_API_KEY
+   # Enter: re_xxxxxxxxxxxxx
+
    wrangler secret put EMAIL_FROM
    # Enter: noreply@yourdomain.com
    ```
-3. Email binding is configured in `wrangler.toml`:
-   ```toml
-   [[send_email]]
-   name = "SEND_EMAIL"
-   ```
+
+**Why Resend?**
+- Simple REST API, no complex bindings
+- Better deliverability
+- Easy domain verification
+- Free tier: 100 emails/day

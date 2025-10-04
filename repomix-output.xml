@@ -104,6 +104,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.dev.vars
 
 # IDE files
 .vscode/
@@ -1298,15 +1299,29 @@ export async function renderPdf(activity, data, pin, env) {
 
 export async function sendEmail(env, email, name, pdfs, archeryPin) {
   try {
-    if (!env.SEND_EMAIL) {
-      console.error('Cloudflare Email binding is not configured')
-      return { success: false, message: 'Email service not configured. Please add SEND_EMAIL binding to wrangler.toml.' }
+    if (!env.RESEND_API_KEY) {
+      console.error('Resend API key not configured')
+      return { success: false, message: 'Email service not configured. Set RESEND_API_KEY secret.' }
     }
 
-    const { EmailMessage } = await import('cloudflare:email')
-    const { createMimeMessage } = await import('mimetext')
+    const attachments = []
+    for (const pdf of pdfs) {
+      try {
+        const docData = await env.PDF_STORAGE.get(pdf.key)
+        if (docData) {
+          const docBuffer = await docData.arrayBuffer()
+          const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
+          attachments.push({
+            filename: `${pdf.activity}-waiver.pdf`,
+            content: base64Doc
+          })
+        }
+      } catch (error) {
+        console.error(`Error retrieving PDF ${pdf.key}:`, error)
+      }
+    }
 
-    const emailContent = `
+    const htmlContent = `
       <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6;">
         <h2>Activity Waiver Confirmation</h2>
@@ -1320,7 +1335,7 @@ export async function sendEmail(env, email, name, pdfs, archeryPin) {
 
         ${archeryPin ? `
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
-          <h3 style="color: #d63031; margin-top: 0;">Archery Access PIN:</h3>
+          <h3 style="color: #d63031; margin-top: 0;">🏹 Archery Access PIN:</h3>
           <p style="font-size: 24px; font-weight: bold; color: #d63031;">${archeryPin}</p>
           <p><small>Use this PIN to access the archery area during your stay.</small></p>
         </div>
@@ -1338,58 +1353,31 @@ export async function sendEmail(env, email, name, pdfs, archeryPin) {
       </html>
     `
 
-    // Create MIME message
-    const msg = createMimeMessage()
-    msg.setSender({ name: "Activity Waiver System", addr: env.EMAIL_FROM })
-    msg.setRecipient(email)
-    msg.setSubject('Activity Waiver Documents')
-    msg.addMessage({
-      contentType: 'text/html',
-      data: emailContent
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM,
+        to: email,
+        subject: 'Activity Waiver Documents',
+        html: htmlContent,
+        attachments
+      })
     })
 
-    // Add attachments
-    for (const pdf of pdfs) {
-      try {
-        const docData = await env.PDF_STORAGE.get(pdf.key)
-        if (docData) {
-          // Convert the document data to base64 for email attachment
-          const docBuffer = await docData.arrayBuffer()
-          const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
-          
-          // Determine file type based on content
-          const filename = `${pdf.activity}-waiver.pdf`
-          const contentType = 'application/pdf'
-          
-          msg.addAttachment({
-            filename: filename,
-            contentType: contentType,
-            data: base64Doc,
-            encoding: 'base64'
-          })
-        } else {
-          console.error(`Document not found in storage: ${pdf.key}`)
-        }
-      } catch (error) {
-        console.error(`Error retrieving PDF ${pdf.key}:`, error)
-      }
+    const result = await response.json()
+
+    if (!response.ok) {
+      console.error('Resend API error:', result)
+      return { success: false, message: result.message || 'Email sending failed' }
     }
 
-    // Create EmailMessage
-    const message = new EmailMessage(
-      env.EMAIL_FROM,
-      email,
-      msg.asRaw()
-    )
-
-    console.log('Sending email to:', email)
-    
-    // Send email using Cloudflare Email
-    await env.SEND_EMAIL.send(message)
-    console.log('Email sent successfully via Cloudflare Email')
-    
+    console.log('Email sent successfully via Resend:', result.id)
     return { success: true, message: 'Email sent successfully' }
-    
+
   } catch (error) {
     console.error('Error sending email:', error)
     return { success: false, message: error.message }
@@ -1420,8 +1408,11 @@ export default {
     }
 
     if (method === 'GET' && url.pathname === '/test-email') {
-      await sendEmail(env, url.searchParams.get('email'),'',[] )
-      return new Response("ok")
+      return new Response(
+        JSON.stringify(
+          await sendEmail(env, url.searchParams.get('email'), '', [])
+        )
+      )
     }
 
     return new Response('Not Found', { status: 404 })
@@ -1483,34 +1474,34 @@ async function handleSubmit(request, env, ctx) {
 
 async function processPdfsAndEmail(env, data) {
   const { submissionId, property, checkinDate, name, email, activities, activityInitials, signature, year, month, day, archeryPin } = data
-  
+
   try {
     console.log(`Starting parallel PDF generation for ${activities.length} activities`)
-    
+
     // Generate all PDFs in parallel
     const pdfPromises = activities.map(async (activity, index) => {
       const pin = activity === 'archery' ? archeryPin : null
       const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${submissionId}.pdf`
-      
+
       try {
         console.log(`Generating PDF ${index + 1}/${activities.length} for activity: ${activity}`)
-        
-        const pdf = await renderPdf(activity, { 
-          property, 
-          checkinDate, 
-          name, 
-          initials: activityInitials[activity], 
-          signature 
+
+        const pdf = await renderPdf(activity, {
+          property,
+          checkinDate,
+          name,
+          initials: activityInitials[activity],
+          signature
         }, pin, env)
-        
+
         await env.PDF_STORAGE.put(key, pdf)
-        
+
         // Save document record
         await env.DB.prepare(`
           INSERT INTO documents (submission_id, activity, storage_key, created_at)
           VALUES (?, ?, ?, ?)
         `).bind(submissionId, activity, key, new Date().toISOString()).run()
-        
+
         return { activity, key, success: true }
       } catch (error) {
         console.error(`Failed to generate PDF for activity ${activity}:`, error.message)
@@ -1521,9 +1512,9 @@ async function processPdfsAndEmail(env, data) {
     // Wait for all PDFs to complete
     const pdfResults = await Promise.all(pdfPromises)
     const successfulPdfs = pdfResults.filter(pdf => pdf.success)
-    
+
     console.log(`PDF generation complete: ${successfulPdfs.length}/${activities.length} successful`)
-    
+
     // Send email with all successful PDFs
     if (successfulPdfs.length > 0) {
       const emailResult = await sendEmail(env, email, name, successfulPdfs, archeryPin)
@@ -1531,7 +1522,7 @@ async function processPdfsAndEmail(env, data) {
     } else {
       console.error('No PDFs were generated successfully, skipping email')
     }
-    
+
   } catch (error) {
     console.error('Error in async PDF processing:', error)
   }
@@ -1540,13 +1531,13 @@ async function processPdfsAndEmail(env, data) {
 async function handleAdminSearch(request, env) {
   const url = new URL(request.url)
   const query = url.searchParams.get('q')
-  
+
   if (!query) {
     return new Response(JSON.stringify({ error: 'Query parameter required' }), { status: 400 })
   }
 
   const results = await env.DB.prepare(`
-    SELECT * FROM submissions 
+    SELECT * FROM submissions
     WHERE name LIKE ? OR email LIKE ? OR property LIKE ? OR checkin_date LIKE ?
     ORDER BY created_at DESC
     LIMIT 50
@@ -1652,6 +1643,7 @@ The GitHub Actions workflow automatically:
 npm install
 
 # Set secrets (first time only)
+wrangler secret put RESEND_API_KEY
 wrangler secret put EMAIL_FROM
 wrangler secret put ARCHERY_PIN
 
@@ -1692,6 +1684,10 @@ npm run wrangler:deploy
 ### Secrets (use `wrangler secret put`)
 
 ```bash
+# Set Resend API key
+wrangler secret put RESEND_API_KEY
+# Enter: re_xxxxxxxxxxxxx
+
 # Set email sender address
 wrangler secret put EMAIL_FROM
 # Enter: noreply@yourdomain.com
@@ -1731,19 +1727,25 @@ VERSION = "1.0"
 
 ## 📧 Email Configuration
 
-The system uses **Cloudflare Email Sending**:
+The system uses **Resend** for email delivery:
 
-1. Verify your domain in Cloudflare Dashboard → Email Routing
-2. Set the sender address as a secret:
+1. Sign up at [resend.com](https://resend.com)
+2. Verify your domain
+3. Create an API key
+4. Set secrets:
    ```bash
+   wrangler secret put RESEND_API_KEY
+   # Enter: re_xxxxxxxxxxxxx
+
    wrangler secret put EMAIL_FROM
    # Enter: noreply@yourdomain.com
    ```
-3. Email binding is configured in `wrangler.toml`:
-   ```toml
-   [[send_email]]
-   name = "SEND_EMAIL"
-   ```
+
+**Why Resend?**
+- Simple REST API, no complex bindings
+- Better deliverability
+- Easy domain verification
+- Free tier: 100 emails/day
 </file>
 
 <file path="wrangler.toml">
@@ -1758,9 +1760,6 @@ directory = "./dist"
 
 [browser]
 binding = "BROWSER"
-
-[[send_email]]
-name = "SEND_EMAIL"
 
 [[r2_buckets]]
 binding = "PDF_STORAGE"

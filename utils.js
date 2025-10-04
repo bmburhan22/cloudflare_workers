@@ -229,15 +229,29 @@ export async function renderPdf(activity, data, pin, env) {
 
 export async function sendEmail(env, email, name, pdfs, archeryPin) {
   try {
-    if (!env.SEND_EMAIL) {
-      console.error('Cloudflare Email binding is not configured')
-      return { success: false, message: 'Email service not configured. Please add SEND_EMAIL binding to wrangler.toml.' }
+    if (!env.RESEND_API_KEY) {
+      console.error('Resend API key not configured')
+      return { success: false, message: 'Email service not configured. Set RESEND_API_KEY secret.' }
     }
 
-    const { EmailMessage } = await import('cloudflare:email')
-    const { createMimeMessage } = await import('mimetext')
+    const attachments = []
+    for (const pdf of pdfs) {
+      try {
+        const docData = await env.PDF_STORAGE.get(pdf.key)
+        if (docData) {
+          const docBuffer = await docData.arrayBuffer()
+          const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
+          attachments.push({
+            filename: `${pdf.activity}-waiver.pdf`,
+            content: base64Doc
+          })
+        }
+      } catch (error) {
+        console.error(`Error retrieving PDF ${pdf.key}:`, error)
+      }
+    }
 
-    const emailContent = `
+    const htmlContent = `
       <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6;">
         <h2>Activity Waiver Confirmation</h2>
@@ -251,7 +265,7 @@ export async function sendEmail(env, email, name, pdfs, archeryPin) {
 
         ${archeryPin ? `
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 20px 0; border-radius: 4px;">
-          <h3 style="color: #d63031; margin-top: 0;">Archery Access PIN:</h3>
+          <h3 style="color: #d63031; margin-top: 0;">🏹 Archery Access PIN:</h3>
           <p style="font-size: 24px; font-weight: bold; color: #d63031;">${archeryPin}</p>
           <p><small>Use this PIN to access the archery area during your stay.</small></p>
         </div>
@@ -269,58 +283,31 @@ export async function sendEmail(env, email, name, pdfs, archeryPin) {
       </html>
     `
 
-    // Create MIME message
-    const msg = createMimeMessage()
-    msg.setSender({ name: "Activity Waiver System", addr: env.EMAIL_FROM })
-    msg.setRecipient(email)
-    msg.setSubject('Activity Waiver Documents')
-    msg.addMessage({
-      contentType: 'text/html',
-      data: emailContent
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM,
+        to: email,
+        subject: 'Activity Waiver Documents',
+        html: htmlContent,
+        attachments
+      })
     })
 
-    // Add attachments
-    for (const pdf of pdfs) {
-      try {
-        const docData = await env.PDF_STORAGE.get(pdf.key)
-        if (docData) {
-          // Convert the document data to base64 for email attachment
-          const docBuffer = await docData.arrayBuffer()
-          const base64Doc = btoa(String.fromCharCode(...new Uint8Array(docBuffer)))
-          
-          // Determine file type based on content
-          const filename = `${pdf.activity}-waiver.pdf`
-          const contentType = 'application/pdf'
-          
-          msg.addAttachment({
-            filename: filename,
-            contentType: contentType,
-            data: base64Doc,
-            encoding: 'base64'
-          })
-        } else {
-          console.error(`Document not found in storage: ${pdf.key}`)
-        }
-      } catch (error) {
-        console.error(`Error retrieving PDF ${pdf.key}:`, error)
-      }
+    const result = await response.json()
+
+    if (!response.ok) {
+      console.error('Resend API error:', result)
+      return { success: false, message: result.message || 'Email sending failed' }
     }
 
-    // Create EmailMessage
-    const message = new EmailMessage(
-      env.EMAIL_FROM,
-      email,
-      msg.asRaw()
-    )
-
-    console.log('Sending email to:', email)
-    
-    // Send email using Cloudflare Email
-    await env.SEND_EMAIL.send(message)
-    console.log('Email sent successfully via Cloudflare Email')
-    
+    console.log('Email sent successfully via Resend:', result.id)
     return { success: true, message: 'Email sent successfully' }
-    
+
   } catch (error) {
     console.error('Error sending email:', error)
     return { success: false, message: error.message }
