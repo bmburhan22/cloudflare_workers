@@ -163,7 +163,7 @@ export async function renderPdf(activity, data, pin, env) {
         <div class="footer">
           <div>Document ID: ${generateId()}</div>
           <div>Generated: ${new Date().toISOString()}</div>
-          <div>Legal Version: v1.0</div>
+          <div>Version: ${env.VERSION || '1.0'}</div>
         </div>
       </body>
       </html>
