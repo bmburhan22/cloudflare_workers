@@ -35,18 +35,9 @@ jobs:
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        
+
     - name: Deploy Worker
       uses: cloudflare/wrangler-action@v3
       with:
         apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        
-    - name: Upload assets to KV
-      run: |
-        npx wrangler kv:key put index.html --binding ASSETS --path dist/index.html
-        npx wrangler kv:key put assets/index.css --binding ASSETS --path dist/assets/index.css  
-        npx wrangler kv:key put assets/index.js --binding ASSETS --path dist/assets/index.js
-      env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
