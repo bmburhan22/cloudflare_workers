@@ -12,45 +12,7 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 - **R2 storage** for PDF files
 - **Assets binding** for static files (no KV needed)
 
-## 🔧 GitHub Actions CI/CD Setup
-
-### 1. Create Cloudflare API Token
-
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
-2. Click **"Create Token"**
-3. Use **"Custom token"** template
-4. Set permissions:
-   - **Account**: `Cloudflare Workers:Edit`
-   - **Account**: `Account Settings:Read`
-   - **User**: `User Details:Read`
-   - **User**: `Memberships:Read`
-   - **Zone**: `Zone:Read` (if using custom domain)
-5. Copy the token
-
-### 2. Get Cloudflare Account ID
-
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Select your account
-3. Copy your **Account ID** from the right sidebar
-
-### 3. Add GitHub Secrets
-
-In your GitHub repository:
-1. Go to **Settings** → **Secrets and variables** → **Actions**
-2. Add these repository secrets:
-   - **Name**: `CLOUDFLARE_API_TOKEN`
-   - **Value**: Your Cloudflare API token
-   - **Name**: `CLOUDFLARE_ACCOUNT_ID`
-   - **Value**: Your Cloudflare account ID
-
-### 4. Deploy Pipeline
-
-The GitHub Actions workflow automatically:
-1. ✅ **Builds React app** (`npm run build`)
-2. ✅ **Applies D1 schema changes** (`schema.sql`)
-3. ✅ **Deploys Worker** with bundled assets (`wrangler deploy`)
-
-## 📋 Manual Deployment
+## 🚀 Deployment
 
 ```bash
 # Install dependencies
@@ -61,15 +23,14 @@ wrangler secret put RESEND_API_KEY
 wrangler secret put EMAIL_FROM
 wrangler secret put ARCHERY_PIN
 
-# Build React app
-npm run build
+# Deploy (migrations + build + deploy)
+npm run deploy
 
-# Apply database schema
-npm run db:init:remote
-
-# Deploy Worker
-npm run wrangler:deploy
+# Local development (migrations + build + dev server)
+npm run dev
 ```
+
+This project uses **Cloudflare's automatic build system** for deployments. When connected to your repository, Cloudflare will automatically build and deploy on every push to main.
 
 ## 🏗️ Architecture
 
@@ -121,12 +82,11 @@ VERSION = "1.0"
 ## 📁 Project Structure
 
 ```
-├── .github/workflows/    # GitHub Actions CI/CD
 ├── src/                  # React source code
 ├── dist/                 # Built React app
+├── migrations/           # D1 database migrations
 ├── worker.js             # Cloudflare Worker entry point
 ├── utils.js              # PDF generation & email utilities
-├── schema.sql            # D1 database schema
 ├── wrangler.toml         # Cloudflare configuration
 └── package.json          # Dependencies & scripts
 ```
@@ -138,6 +98,44 @@ VERSION = "1.0"
 - **Optimized browser settings** (faster rendering)
 - **Minimal dependencies** (smaller bundle size)
 - **ES2025 modern syntax** (better performance)
+
+## 🗄️ Database Migrations
+
+This project uses **Wrangler D1 migrations** to manage database schema changes safely.
+
+### Creating a New Migration
+
+```bash
+npm run db:migrations:create migration_name
+```
+
+### Applying Migrations
+
+Migrations run automatically with `npm run dev` (local) and `npm run deploy` (remote).
+
+Manual commands:
+```bash
+npm run db:migrate:local    # Apply to local D1
+npm run db:migrate:remote   # Apply to remote D1
+npm run db:migrations:list  # Check migration status
+```
+
+### Migration Rules
+
+1. **Never edit existing migrations** - Always create new ones
+2. **Test locally first** - Run with `--local` before `--remote`
+3. **Migrations are tracked** - D1 remembers which have run
+4. **Use IF NOT EXISTS** - Keep migrations idempotent
+
+### Example Migration
+
+```sql
+-- Add a new column
+ALTER TABLE submissions ADD COLUMN phone TEXT;
+
+-- Create index
+CREATE INDEX IF NOT EXISTS idx_submissions_phone ON submissions (phone);
+```
 
 ## 📧 Email Configuration
 

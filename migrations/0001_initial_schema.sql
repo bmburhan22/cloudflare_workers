@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS documents;
-DROP TABLE IF EXISTS submissions;
+-- Migration: Initial schema
+-- Created: 2024-01-01
 
-CREATE TABLE submissions (
+CREATE TABLE IF NOT EXISTS submissions (
   id TEXT PRIMARY KEY,
   property TEXT NOT NULL,
   checkin_date TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE submissions (
   created_at TEXT NOT NULL
 );
 
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   submission_id TEXT NOT NULL,
   activity TEXT NOT NULL,
@@ -22,5 +22,5 @@ CREATE TABLE documents (
   FOREIGN KEY (submission_id) REFERENCES submissions (id)
 );
 
-CREATE INDEX idx_submissions_lookup ON submissions (name, email, property, checkin_date);
-CREATE INDEX idx_documents_submission ON documents (submission_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_lookup ON submissions (name, email, property, checkin_date);
+CREATE INDEX IF NOT EXISTS idx_documents_submission ON documents (submission_id);
