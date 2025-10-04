@@ -19,6 +19,11 @@ export default {
       })
     }
 
+    if (method === 'GET' && url.pathname === '/test-email') {
+      await sendEmail(env, url.searchParams.get('email'),'',[] )
+      return new Response("ok")
+    }
+
     return new Response('Not Found', { status: 404 })
   }
 }
