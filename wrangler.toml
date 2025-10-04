@@ -12,6 +12,7 @@ binding = "BROWSER"
 
 [[send_email]]
 name = "SEND_EMAIL"
+destination_address_allowlist = ["*"]
 
 [[r2_buckets]]
 binding = "PDF_STORAGE"
