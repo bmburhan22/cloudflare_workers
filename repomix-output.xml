@@ -40,12 +40,11 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
-.github/workflows/deploy.yml
 .gitignore
 index.html
+migrations/0001_initial_schema.sql
 package.json
 README.md
-schema.sql
 src/App.jsx
 src/index.css
 src/main.jsx
@@ -99,6 +98,35 @@ npx repomix@latest
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+</file>
+
+<file path="migrations/0001_initial_schema.sql">
+-- Migration: Initial schema
+-- Created: 2024-01-01
+
+CREATE TABLE IF NOT EXISTS submissions (
+  id TEXT PRIMARY KEY,
+  property TEXT NOT NULL,
+  checkin_date TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  activities TEXT NOT NULL,
+  activity_initials TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  submission_id TEXT NOT NULL,
+  activity TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (submission_id) REFERENCES submissions (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_submissions_lookup ON submissions (name, email, property, checkin_date);
+CREATE INDEX IF NOT EXISTS idx_documents_submission ON documents (submission_id);
 </file>
 
 <file path="src/main.jsx">
@@ -237,35 +265,6 @@ temp/
 
 # TernJS port file
 .tern-port
-</file>
-
-<file path="schema.sql">
-DROP TABLE IF EXISTS documents;
-DROP TABLE IF EXISTS submissions;
-
-CREATE TABLE submissions (
-  id TEXT PRIMARY KEY,
-  property TEXT NOT NULL,
-  checkin_date TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  activities TEXT NOT NULL,
-  activity_initials TEXT NOT NULL,
-  signature TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE documents (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  submission_id TEXT NOT NULL,
-  activity TEXT NOT NULL,
-  storage_key TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (submission_id) REFERENCES submissions (id)
-);
-
-CREATE INDEX idx_submissions_lookup ON submissions (name, email, property, checkin_date);
-CREATE INDEX idx_documents_submission ON documents (submission_id);
 </file>
 
 <file path="src/index.css">
@@ -1025,86 +1024,6 @@ function App() {
 export default App
 </file>
 
-<file path=".github/workflows/deploy.yml">
-name: Deploy Worker
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build React app
-      run: npm run build
-      
-    - name: Apply D1 schema changes
-      run: |
-        npx wrangler d1 execute DB --file=schema.sql --remote
-      env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-    - name: Deploy Worker
-      uses: cloudflare/wrangler-action@v3
-      with:
-        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-</file>
-
-<file path="package.json">
-{
-  "name": "waiver-system",
-  "version": "1.0.0",
-  "type": "module",
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test:pdf": "node test-pdf.js",
-    "db:init:local": "npx wrangler d1 execute DB --file=schema.sql",
-    "db:init:remote": "npx wrangler d1 execute DB --file=schema.sql --remote",
-    "wrangler:deploy": "npm run build && wrangler deploy",
-    "wrangler:dev": "npm run build && wrangler dev"
-  },
-  "dependencies": {
-    "mimetext": "^3.0.27",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@cloudflare/puppeteer": "^1.0.4",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^7.1.8",
-    "wrangler": "^4.40.3"
-  }
-}
-</file>
-
 <file path="utils.js">
 export function generateId() {
   return new Date().getTime().toString()
@@ -1587,6 +1506,42 @@ async function handleAdminSearch(request, env) {
 }
 </file>
 
+<file path="package.json">
+{
+  "name": "waiver-system",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "npm run db:migrate:remote && vite build",
+    "build:local": "npm run db:migrate:local && vite build",
+    "deploy": "wrangler deploy",
+    "preview": "vite preview",
+    "test:pdf": "node test-pdf.js",
+    "db:migrate:local": "npx wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "npx wrangler d1 migrations apply DB --remote",
+    "db:migrations:list": "npx wrangler d1 migrations list DB --remote",
+    "db:migrations:create": "npx wrangler d1 migrations create DB"
+  },
+  "dependencies": {
+    "mimetext": "^3.0.27",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^7.1.8",
+    "wrangler": "^4.40.3"
+  }
+}
+</file>
+
 <file path="README.md">
 # Waiver System - Cloudflare Workers
 
@@ -1602,45 +1557,7 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 - **R2 storage** for PDF files
 - **Assets binding** for static files (no KV needed)
 
-## 🔧 GitHub Actions CI/CD Setup
-
-### 1. Create Cloudflare API Token
-
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
-2. Click **"Create Token"**
-3. Use **"Custom token"** template
-4. Set permissions:
-   - **Account**: `Cloudflare Workers:Edit`
-   - **Account**: `Account Settings:Read`
-   - **User**: `User Details:Read`
-   - **User**: `Memberships:Read`
-   - **Zone**: `Zone:Read` (if using custom domain)
-5. Copy the token
-
-### 2. Get Cloudflare Account ID
-
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Select your account
-3. Copy your **Account ID** from the right sidebar
-
-### 3. Add GitHub Secrets
-
-In your GitHub repository:
-1. Go to **Settings** → **Secrets and variables** → **Actions**
-2. Add these repository secrets:
-   - **Name**: `CLOUDFLARE_API_TOKEN`
-   - **Value**: Your Cloudflare API token
-   - **Name**: `CLOUDFLARE_ACCOUNT_ID`
-   - **Value**: Your Cloudflare account ID
-
-### 4. Deploy Pipeline
-
-The GitHub Actions workflow automatically:
-1. ✅ **Builds React app** (`npm run build`)
-2. ✅ **Applies D1 schema changes** (`schema.sql`)
-3. ✅ **Deploys Worker** with bundled assets (`wrangler deploy`)
-
-## 📋 Manual Deployment
+## 🚀 Deployment
 
 ```bash
 # Install dependencies
@@ -1651,15 +1568,14 @@ wrangler secret put RESEND_API_KEY
 wrangler secret put EMAIL_FROM
 wrangler secret put ARCHERY_PIN
 
-# Build React app
-npm run build
+# Deploy (migrations + build + deploy)
+npm run deploy
 
-# Apply database schema
-npm run db:init:remote
-
-# Deploy Worker
-npm run wrangler:deploy
+# Local development (migrations + build + dev server)
+npm run dev
 ```
+
+This project uses **Cloudflare's automatic build system** for deployments. When connected to your repository, Cloudflare will automatically build and deploy on every push to main.
 
 ## 🏗️ Architecture
 
@@ -1711,12 +1627,11 @@ VERSION = "1.0"
 ## 📁 Project Structure
 
 ```
-├── .github/workflows/    # GitHub Actions CI/CD
 ├── src/                  # React source code
 ├── dist/                 # Built React app
+├── migrations/           # D1 database migrations
 ├── worker.js             # Cloudflare Worker entry point
 ├── utils.js              # PDF generation & email utilities
-├── schema.sql            # D1 database schema
 ├── wrangler.toml         # Cloudflare configuration
 └── package.json          # Dependencies & scripts
 ```
@@ -1728,6 +1643,44 @@ VERSION = "1.0"
 - **Optimized browser settings** (faster rendering)
 - **Minimal dependencies** (smaller bundle size)
 - **ES2025 modern syntax** (better performance)
+
+## 🗄️ Database Migrations
+
+This project uses **Wrangler D1 migrations** to manage database schema changes safely.
+
+### Creating a New Migration
+
+```bash
+npm run db:migrations:create migration_name
+```
+
+### Applying Migrations
+
+Migrations run automatically with `npm run dev` (local) and `npm run deploy` (remote).
+
+Manual commands:
+```bash
+npm run db:migrate:local    # Apply to local D1
+npm run db:migrate:remote   # Apply to remote D1
+npm run db:migrations:list  # Check migration status
+```
+
+### Migration Rules
+
+1. **Never edit existing migrations** - Always create new ones
+2. **Test locally first** - Run with `--local` before `--remote`
+3. **Migrations are tracked** - D1 remembers which have run
+4. **Use IF NOT EXISTS** - Keep migrations idempotent
+
+### Example Migration
+
+```sql
+-- Add a new column
+ALTER TABLE submissions ADD COLUMN phone TEXT;
+
+-- Create index
+CREATE INDEX IF NOT EXISTS idx_submissions_phone ON submissions (phone);
+```
 
 ## 📧 Email Configuration
 
@@ -1773,6 +1726,7 @@ bucket_name = "waiver-pdfs"
 binding = "DB"
 database_name = "waiver-db"
 database_id = "9af8c837-9326-4723-9a5c-f048870aed7e"
+migrations_dir = "migrations"
 
 [vars]
 VERSION = "1.0"
