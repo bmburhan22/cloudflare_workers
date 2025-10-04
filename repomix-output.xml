@@ -49,7 +49,6 @@ src/App.jsx
 src/index.css
 src/main.jsx
 task.md
-test-pdf.js
 utils.js
 vite.config.js
 worker.js
@@ -566,59 +565,6 @@ input:focus, select:focus {
     height: 150px;
   }
 }
-</file>
-
-<file path="test-pdf.js">
-import { renderPdf, generateId, generateAccessCode } from './utils.js'
-import { writeFileSync } from 'fs'
-async function testPdfGeneration() {
-  console.log('🧪 Testing PDF generation...')
-  
-  try {
-    // Test data
-    const testData = {
-      property: 'Test Resort',
-      checkinDate: '2024-01-15',
-      name: 'John Doe',
-      initials: 'JD',
-      signature: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiB2aWV3Qm94PSIwIDAgMjAwIDgwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgo8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZjBmMGYwIiBzdHJva2U9IiMzMzMiLz4KPHRleHQgeD0iMTAwIiB5PSI0NSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjMzMzIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Kb2huIERvZTwvdGV4dD4KPC9zdmc+'
-    }
-    
-    const activity = 'kayaking'
-    const accessCode = generateAccessCode()
-    
-    console.log('📝 Generating PDF for:', activity)
-    console.log('👤 Participant:', testData.name)
-    console.log('🏨 Property:', testData.property)
-    console.log('🔑 Access Code:', accessCode)
-    
-    // Generate the PDF (will return HTML for local testing)
-    const pdfContent = await renderPdf(activity, testData, accessCode)
-    
-    // Save to file
-    const filename = `test-waiver-${activity}-${Date.now()}.html`
-    writeFileSync(filename, pdfContent)
-    
-    console.log('✅ HTML generated successfully!')
-    console.log(`📄 File saved as: ${filename}`)
-    console.log('🌐 Open the file in your browser and use Ctrl+P to save as PDF')
-    console.log('📝 Note: In Cloudflare Workers, this will generate a real PDF file')
-    console.log('')
-    console.log('📋 Test Summary:')
-    console.log(`   - Activity: ${activity}`)
-    console.log(`   - Participant: ${testData.name}`)
-    console.log(`   - Property: ${testData.property}`)
-    console.log(`   - Access Code: ${accessCode}`)
-    console.log(`   - File: ${filename}`)
-    
-  } catch (error) {
-    console.error('❌ Error generating PDF:', error.message)
-    console.error('Stack trace:', error.stack)
-  }
-}
-
-// Run the test
-testPdfGeneration()
 </file>
 
 <file path="src/App.jsx">
@@ -1344,31 +1290,67 @@ export async function sendEmail(env, email, name, pdfs, archeryPin) {
 <file path="worker.js">
 import { renderPdf, sendEmail, generateId } from './utils.js'
 
+const jsonResponse = (data, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  })
+
+const errorResponse = (message, status = 400) =>
+  jsonResponse({ error: message }, status)
+
+const buildPdfStorageKey = (checkinDate, property, activity, name, id) => {
+  const date = new Date(checkinDate)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${id}.pdf`
+}
+
+const getArcheryPin = (activities, env) =>
+  activities.includes('archery') ? env.ARCHERY_PIN : null
+
+const saveSubmissionToDb = (env, id, data) =>
+  env.DB.prepare(`
+    INSERT INTO submissions (id, property, checkin_date, name, email, activities, activity_initials, signature, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id,
+    data.property,
+    data.checkinDate,
+    data.name,
+    data.email,
+    JSON.stringify(data.activities),
+    JSON.stringify(data.activityInitials),
+    data.signature,
+    new Date().toISOString()
+  ).run()
+
+const saveDocumentToDb = (env, submissionId, activity, storageKey) =>
+  env.DB.prepare(`
+    INSERT INTO documents (submission_id, activity, storage_key, created_at)
+    VALUES (?, ?, ?, ?)
+  `).bind(submissionId, activity, storageKey, new Date().toISOString()).run()
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url)
-    const method = request.method
+    const { pathname, searchParams } = new URL(request.url)
+    const { method } = request
 
-    if (method === 'POST' && url.pathname === '/submit') {
+    if (method === 'POST' && pathname === '/submit') {
       return handleSubmit(request, env, ctx)
     }
 
-    if (method === 'GET' && url.pathname === '/admin/search') {
+    if (method === 'GET' && pathname === '/admin/search') {
       return handleAdminSearch(request, env)
     }
 
-    if (method === 'GET' && url.pathname === '/status') {
-      return new Response(JSON.stringify({ status: 'ok' }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+    if (method === 'GET' && pathname === '/status') {
+      return jsonResponse({ status: 'ok' })
     }
 
-    if (method === 'GET' && url.pathname === '/test-email') {
-      return new Response(
-        JSON.stringify(
-          await sendEmail(env, url.searchParams.get('email'), '', [])
-        )
-      )
+    if (method === 'GET' && pathname === '/test-email') {
+      return jsonResponse(await sendEmail(env, searchParams.get('email'), '', []))
     }
 
     return new Response('Not Found', { status: 404 })
@@ -1381,26 +1363,14 @@ async function handleSubmit(request, env, ctx) {
     const { property, checkinDate, name, email, activities, activityInitials, signature } = data
 
     if (!property || !checkinDate || !name || !email || !activities?.length || !activityInitials || !signature) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400 })
+      return errorResponse('Missing required fields')
     }
 
     const submissionId = generateId()
-    const date = new Date(checkinDate)
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
+    const archeryPin = getArcheryPin(activities, env)
 
-    // Save submission to database immediately
-    await env.DB.prepare(`
-      INSERT INTO submissions (id, property, checkin_date, name, email, activities, activity_initials, signature, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(submissionId, property, checkinDate, name, email, JSON.stringify(activities), JSON.stringify(activityInitials), signature, new Date().toISOString()).run()
+    await saveSubmissionToDb(env, submissionId, data)
 
-    // Return immediate response
-    const hasArchery = activities.includes('archery')
-    const archeryPin = hasArchery ? env.ARCHERY_PIN : null
-
-    // Start async PDF generation and email process
     ctx.waitUntil(processPdfsAndEmail(env, {
       submissionId,
       property,
@@ -1410,34 +1380,30 @@ async function handleSubmit(request, env, ctx) {
       activities,
       activityInitials,
       signature,
-      year,
-      month,
-      day,
       archeryPin
     }))
 
-    return new Response(JSON.stringify({
+    return jsonResponse({
       success: true,
       submissionId,
-      archeryPin: hasArchery ? archeryPin : null,
+      archeryPin,
       message: 'Submission received! PDFs are being generated and will be emailed shortly.'
-    }), { headers: { 'Content-Type': 'application/json' } })
+    })
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 })
+    return errorResponse(error.message, 500)
   }
 }
 
 async function processPdfsAndEmail(env, data) {
-  const { submissionId, property, checkinDate, name, email, activities, activityInitials, signature, year, month, day, archeryPin } = data
+  const { submissionId, property, checkinDate, name, email, activities, activityInitials, signature, archeryPin } = data
 
   try {
     console.log(`Starting parallel PDF generation for ${activities.length} activities`)
 
-    // Generate all PDFs in parallel
-    const pdfPromises = activities.map(async (activity, index) => {
+    const pdfResults = await Promise.all(activities.map(async (activity, index) => {
       const pin = activity === 'archery' ? archeryPin : null
-      const key = `waivers/${year}/${month}/${day}/${property}/${activity}/${name.replace(' ', '-').toLowerCase()}-${submissionId}.pdf`
+      const key = buildPdfStorageKey(checkinDate, property, activity, name, submissionId)
 
       try {
         console.log(`Generating PDF ${index + 1}/${activities.length} for activity: ${activity}`)
@@ -1451,27 +1417,19 @@ async function processPdfsAndEmail(env, data) {
         }, pin, env)
 
         await env.PDF_STORAGE.put(key, pdf)
-
-        // Save document record
-        await env.DB.prepare(`
-          INSERT INTO documents (submission_id, activity, storage_key, created_at)
-          VALUES (?, ?, ?, ?)
-        `).bind(submissionId, activity, key, new Date().toISOString()).run()
+        await saveDocumentToDb(env, submissionId, activity, key)
 
         return { activity, key, success: true }
       } catch (error) {
         console.error(`Failed to generate PDF for activity ${activity}:`, error.message)
         return { activity, key, success: false, error: error.message }
       }
-    })
+    }))
 
-    // Wait for all PDFs to complete
-    const pdfResults = await Promise.all(pdfPromises)
     const successfulPdfs = pdfResults.filter(pdf => pdf.success)
 
     console.log(`PDF generation complete: ${successfulPdfs.length}/${activities.length} successful`)
 
-    // Send email with all successful PDFs
     if (successfulPdfs.length > 0) {
       const emailResult = await sendEmail(env, email, name, successfulPdfs, archeryPin)
       console.log('Email result:', emailResult)
@@ -1485,56 +1443,21 @@ async function processPdfsAndEmail(env, data) {
 }
 
 async function handleAdminSearch(request, env) {
-  const url = new URL(request.url)
-  const query = url.searchParams.get('q')
+  const query = new URL(request.url).searchParams.get('q')
 
   if (!query) {
-    return new Response(JSON.stringify({ error: 'Query parameter required' }), { status: 400 })
+    return errorResponse('Query parameter required')
   }
 
+  const searchPattern = `%${query}%`
   const results = await env.DB.prepare(`
     SELECT * FROM submissions
     WHERE name LIKE ? OR email LIKE ? OR property LIKE ? OR checkin_date LIKE ?
     ORDER BY created_at DESC
     LIMIT 50
-  `).bind(`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`).all()
+  `).bind(searchPattern, searchPattern, searchPattern, searchPattern).all()
 
-  return new Response(JSON.stringify({ results: results.results }), {
-    headers: { 'Content-Type': 'application/json' }
-  })
-}
-</file>
-
-<file path="package.json">
-{
-  "name": "waiver-system",
-  "version": "1.0.0",
-  "type": "module",
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "scripts": {
-    "dev": "wrangler dev",
-    "build": "npm run db:migrate:remote && vite build",
-    "build:local": "npm run db:migrate:local && vite build",
-    "deploy": "wrangler deploy",
-    "preview": "vite preview",
-    "test:pdf": "node test-pdf.js",
-    "db:migrate:local": "npx wrangler d1 migrations apply DB --local",
-    "db:migrate:remote": "npx wrangler d1 migrations apply DB --remote",
-    "db:migrations:list": "npx wrangler d1 migrations list DB --remote",
-    "db:migrations:create": "npx wrangler d1 migrations create DB"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "@cloudflare/puppeteer": "^1.0.4",
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^7.1.8",
-    "wrangler": "^4.40.3"
-  }
+  return jsonResponse({ results: results.results })
 }
 </file>
 
@@ -1699,6 +1622,38 @@ The system uses **Resend** for email delivery:
 - Better deliverability
 - Easy domain verification
 - Free tier: 100 emails/day
+</file>
+
+<file path="package.json">
+{
+  "name": "waiver-system",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "npm run db:migrate:remote && vite build",
+    "build:local": "npm run db:migrate:local && vite build",
+    "deploy": "wrangler deploy",
+    "preview": "vite preview",
+    "db:migrate:local": "npx wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "npx wrangler d1 migrations apply DB --remote",
+    "db:migrations:list": "npx wrangler d1 migrations list DB --remote",
+    "db:migrations:create": "npx wrangler d1 migrations create DB"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/puppeteer": "^1.0.4",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^7.1.8",
+    "wrangler": "^4.40.3"
+  }
+}
 </file>
 
 <file path="wrangler.toml">
