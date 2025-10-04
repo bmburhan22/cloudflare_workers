@@ -66,8 +66,8 @@ function SignaturePad({ onSignatureChange }) {
       <label className="signature-label">Digital Signature</label>
       <canvas
         ref={canvasRef}
-        width={400}
-        height={200}
+        width={700}
+        height={150}
         className="signature-pad"
         onMouseDown={startDrawing}
         onMouseMove={draw}
@@ -214,7 +214,7 @@ function App() {
 
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => setSuccess(null)}
               className="submit-btn"
               style={{ marginTop: '20px' }}
             >
