@@ -11,7 +11,6 @@
     "build:local": "npm run db:migrate:local && vite build",
     "deploy": "wrangler deploy",
     "preview": "vite preview",
-    "test:pdf": "node test-pdf.js",
     "db:migrate:local": "npx wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "npx wrangler d1 migrations apply DB --remote",
     "db:migrations:list": "npx wrangler d1 migrations list DB --remote",
