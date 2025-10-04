@@ -4,7 +4,6 @@ export function generateId() {
 
 export async function renderPdf(activity, data, pin, env) {
   try {
-    // Create HTML content for PDF generation
     const html = `
       <!DOCTYPE html>
       <html>
@@ -169,7 +168,6 @@ export async function renderPdf(activity, data, pin, env) {
       </html>
     `
 
-    // Use Cloudflare Browser Rendering API to generate PDF
     if (env && env.BROWSER) {
       try {
         const puppeteer = await import('@cloudflare/puppeteer')
@@ -185,14 +183,11 @@ export async function renderPdf(activity, data, pin, env) {
         })
         const page = await browser.newPage()
         
-        // Optimize page settings for speed
         await page.setViewport({ width: 800, height: 600 })
-        await page.setJavaScriptEnabled(false) // Disable JS for faster rendering
+        await page.setJavaScriptEnabled(false)
         
-        // Set the HTML content
         await page.setContent(html, { waitUntil: 'networkidle0' })
         
-        // Generate PDF with optimized settings for speed
         const pdf = await page.pdf({
           format: 'A4',
           margin: {
@@ -201,23 +196,20 @@ export async function renderPdf(activity, data, pin, env) {
             bottom: '20px',
             left: '20px'
           },
-          printBackground: false, // Disable for speed
-          preferCSSPageSize: false, // Disable for speed
-          displayHeaderFooter: false, // Disable for speed
-          scale: 0.8 // Smaller scale for faster rendering
+          printBackground: false,
+          preferCSSPageSize: false,
+          displayHeaderFooter: false,
+          scale: 0.8
         })
         
-        // Close browser
         await browser.close()
         
         return new Uint8Array(pdf)
       } catch (browserError) {
         console.warn('Browser Rendering API failed, falling back to HTML:', browserError.message)
-        // Fallback to HTML when browser API fails (rate limits, etc.)
         return new TextEncoder().encode(html)
       }
     } else {
-      // Fallback for local development - return HTML
       return new TextEncoder().encode(html)
     }
     
