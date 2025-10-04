@@ -7,10 +7,10 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 - **Single-page React app** with modern ES2025
 - **Parallel PDF generation** using Cloudflare Browser Rendering API
 - **Background processing** for instant user feedback
-- **Email delivery** with PDF attachments
+- **Email delivery** with PDF attachments via Cloudflare Email
 - **D1 database** for submissions tracking
 - **R2 storage** for PDF files
-- **KV storage** for static assets
+- **Assets binding** for static files (no KV needed)
 
 ## 🔧 GitHub Actions CI/CD Setup
 
@@ -46,16 +46,19 @@ In your GitHub repository:
 ### 4. Deploy Pipeline
 
 The GitHub Actions workflow automatically:
-1. ✅ **Applies D1 schema changes** (`schema.sql`)
-2. ✅ **Builds React app** (`npm run build`)
-3. ✅ **Deploys Worker** (`wrangler deploy`)
-4. ✅ **Uploads assets to KV** (static files)
+1. ✅ **Builds React app** (`npm run build`)
+2. ✅ **Applies D1 schema changes** (`schema.sql`)
+3. ✅ **Deploys Worker** with bundled assets (`wrangler deploy`)
 
 ## 📋 Manual Deployment
 
 ```bash
 # Install dependencies
 npm install
+
+# Set secrets (first time only)
+wrangler secret put EMAIL_FROM
+wrangler secret put ARCHERY_PIN
 
 # Build React app
 npm run build
@@ -84,18 +87,31 @@ npm run wrangler:deploy
                     ┌─────────┼─────────┐
                     ▼         ▼         ▼
               ┌─────────┐ ┌─────────┐ ┌─────────┐
-              │   D1    │ │   R2    │ │   KV    │
-              │Database │ │Storage  │ │Assets   │
+              │   D1    │ │   R2    │ │ Assets  │
+              │Database │ │Storage  │ │ Binding │
               └─────────┘ └─────────┘ └─────────┘
 ```
 
-## 🔑 Environment Variables
+## 🔑 Configuration
 
-Set these in `wrangler.toml` or as secrets:
+### Secrets (use `wrangler secret put`)
 
-- `EMAIL_FROM`: Sender email address
-- `ARCHERY_PIN`: PIN for archery access (default: 1234)
-- `LEGAL_VERSION`: Legal document version
+```bash
+# Set email sender address
+wrangler secret put EMAIL_FROM
+# Enter: noreply@yourdomain.com
+
+# Set archery access PIN
+wrangler secret put ARCHERY_PIN
+# Enter: 1234
+```
+
+### Variables (in `wrangler.toml`)
+
+```toml
+[vars]
+VERSION = "1.0"
+```
 
 ## 📁 Project Structure
 
@@ -120,8 +136,16 @@ Set these in `wrangler.toml` or as secrets:
 
 ## 📧 Email Configuration
 
-The system supports both:
-- **Cloudflare Email Workers** (requires verified domain)
-- **Resend API** (easier setup, recommended)
+The system uses **Cloudflare Email Sending**:
 
-Switch between them by updating the `sendEmail` function in `utils.js`.
+1. Verify your domain in Cloudflare Dashboard → Email Routing
+2. Set the sender address as a secret:
+   ```bash
+   wrangler secret put EMAIL_FROM
+   # Enter: noreply@yourdomain.com
+   ```
+3. Email binding is configured in `wrangler.toml`:
+   ```toml
+   [[send_email]]
+   name = "SEND_EMAIL"
+   ```
