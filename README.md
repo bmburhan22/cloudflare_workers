@@ -12,6 +12,14 @@ A modern waiver system built on Cloudflare Workers with React frontend, PDF gene
 - **R2 storage** for PDF files
 - **Assets binding** for static files (no KV needed)
 
+## 📸 Screenshots
+
+### Waiver Form
+![Waiver Form](screenshots/form.png)
+
+### Submission Confirmation
+![Submission Confirmation](screenshots/submitted.png)
+
 ## 🚀 Deployment
 
 ```bash
